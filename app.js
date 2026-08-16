@@ -179,7 +179,47 @@ function dashboard(){let t=week(),days=new Set(t.w.map(x=>dk(x.date)));$('weekWo
 function progress(){let names=Object.keys(EX).sort();$('progressExercise').innerHTML=names.map(n=>`<option>${esc(n)}</option>`).join('');updateProgress($('progressExercise').value)}$('progressExercise').onchange=e=>updateProgress(e.target.value);
 function bars(cv,obj){let ctx=cv.getContext('2d'),d=devicePixelRatio||1,w=cv.clientWidth,h=cv.height;cv.width=w*d;cv.height=h*d;ctx.scale(d,d);ctx.clearRect(0,0,w,h);let a=Object.entries(obj).sort((x,y)=>y[1]-x[1]).slice(0,8),m=Math.max(...a.map(x=>x[1]),1);a.forEach(([k,v],i)=>{let y=10+i*25;ctx.fillStyle='#aebcff';ctx.fillRect(115,y,(w-130)*v/m,16);ctx.fillStyle='#9aa6b8';ctx.font='12px sans-serif';ctx.fillText(k,5,y+12)})}
 function updateProgress(n){let a=setsFor(n),b=best(n),rm=oneRM(n),vol=a.reduce((x,s)=>x+s.weight*s.reps,0);$('bestWeight').textContent=`${b.weight} lb`;$('bestReps').textContent=b.reps;$('best1rm').textContent=`${Math.round(rm)} lb`;$('exerciseVolume').textContent=`${Math.round(vol).toLocaleString()} lb`;let trend={};a.forEach(s=>trend[dk(s.date)]=Math.max(trend[dk(s.date)]||0,s.weight*(1+s.reps/30)));line($('strengthChart'),Object.values(trend).slice(-14));let mus={};data.workouts.forEach(w=>(w.exercises||[]).forEach(e=>{let m=info(e.name)[0];mus[m]=(mus[m]||0)+e.sets.reduce((q,s)=>q+(+s.weight||0)*(+s.reps||0),0)}));bars($('muscleChart'),mus);let f=[];for(let i=7;i>=0;i--){let end=new Date();end.setHours(0,0,0,0);end.setDate(end.getDate()-i*7);let start=new Date(end);start.setDate(start.getDate()-7);f.push(data.workouts.filter(w=>new Date(w.date)>=start&&new Date(w.date)<end).length)}line($('frequencyChart'),f);$('progressDetails').innerHTML=`<div class="card"><b>Progression recommendation</b><p class="muted small">${esc(suggest(n))}. Rep PRs and weight PRs are tracked independently. Estimated 1RM uses the Epley formula.</p></div>`}
-function history(){let all=[...data.workouts.map(x=>({...x,type:'Workout'})),...data.cardio.map(x=>({...x,type:'Cardio'}))].sort((a,b)=>new Date(b.date)-new Date(a.date));$('historyList').innerHTML=all.map(x=>x.type==='Workout'?`<div class="card historyItem"><span><b>${esc(x.routine)}</b><br><span class="muted small">${fd(x.date)} • ${x.durationMin} min • ${Math.round(x.volume||0).toLocaleString()} lb volume</span></span><span class="pill">${x.exercises.reduce((a,e)=>a+e.sets.length,0)} sets</span></div>`:`<div class="card historyItem"><span><b>${esc(x.activity)}</b><br><span class="muted small">${fd(x.date)} • ${x.duration} min</span></span><span class="pill">${x.calories||0} kcal</span></div>`).join('')||'<div class="empty">No history yet.</div>'}
+
+function history(){
+  let all=[...data.workouts.map(x=>({...x,type:'Workout'})),...data.cardio.map(x=>({...x,type:'Cardio'}))].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  
+  $('historyList').innerHTML=all.map((x, idx)=>{
+    if(x.type==='Workout'){
+      let exList = (x.exercises||[]).map(e=>`
+        <div class="historyExercise">
+          <div class="historyExHead"><b>${esc(e.name)}</b></div>
+          <div class="historySetsGrid">
+            ${(e.sets||[]).map((s,sIdx)=>`<span class="historySetBadge">Set ${sIdx+1}: ${s.weight}lb × ${s.reps}</span>`).join('')}
+          </div>
+        </div>
+      `).join('');
+      
+      return `<div class="card historyCard">
+        <div class="historyHeader" data-htoggle="${idx}">
+          <div>
+            <b>${esc(x.routine)}</b>
+            <div class="muted small">${fd(x.date)} • ${x.durationMin} min • ${Math.round(x.volume||0).toLocaleString()} lb volume</div>
+          </div>
+          <span class="pill">${(x.exercises||[]).reduce((a,e)=>a+(e.sets||[]).length,0)} sets ▼</span>
+        </div>
+        <div id="hdetails-${idx}" class="historyDetails hidden">${exList}</div>
+      </div>`;
+    } else {
+      return `<div class="card historyItem">
+        <div><b>${esc(x.activity)}</b><br><span class="muted small">${fd(x.date)} • ${x.duration} min</span></div>
+        <span class="pill">${x.calories||0} kcal</span>
+      </div>`;
+    }
+  }).join('')||'<div class="empty">No history yet.</div>';
+
+  $('historyList').querySelectorAll('[data-htoggle]').forEach(el=>{
+    el.onclick=()=>{
+      let det = $(`hdetails-${el.dataset.htoggle}`);
+      if(det) det.classList.toggle('hidden');
+    };
+  });
+}
+
 $('clearHistory').onclick=()=>{if(confirm('Clear workout and cardio history?')){data.workouts=[];data.cardio=[];save();history();dashboard();progress()}};
 function settings(){$('defaultRest').value=data.settings.rest;$('routineSettings').innerHTML=Object.entries(data.routines).map(([r,e])=>`<div class="routineRow" style="padding:12px 0;border-bottom:1px solid #252e3b"><span><b>${esc(r)}</b><br><span class="muted small">${e.length} exercises</span></span><span class="pill">Built in</span></div>`).join('')}
 $('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Default rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`liftlog-backup-${dk(new Date())}.json`;a.click()};$('importData').onchange=e=>{let f=e.target.files[0],r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.workouts||!x.cardio)throw 0;data=x;data.settings=data.settings||{rest:90};save();location.reload()}catch{alert('Invalid LiftLog backup.')}};r.readAsText(f)};$('clearData').onclick=()=>{if(confirm('Delete ALL LiftLog data?')){localStorage.removeItem(KEY);location.reload()}};
