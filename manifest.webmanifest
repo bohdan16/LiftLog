@@ -1,0 +1,9 @@
+{
+  "name":"LiftLog Workout Tracker",
+  "short_name":"LiftLog",
+  "start_url":".",
+  "display":"standalone",
+  "background_color":"#0b0f17",
+  "theme_color":"#111827",
+  "description":"Offline-first workout, cardio, progression and PR tracker."
+}
