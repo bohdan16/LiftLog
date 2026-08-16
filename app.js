@@ -21,7 +21,7 @@ function oneRM(n){return Math.max(0,...setsFor(n).map(x=>x.weight*(1+x.reps/30))
 function suggest(n){let a=setsFor(n);if(!a.length)return'First session: choose a comfortable weight';let s=a[a.length-1],w=s.weight;if(s.reps>=12)return`Next: ${Math.round((w+5)/5)*5} lb`;if(s.reps>=10)return`Next: ${Math.round((w+2.5)/2.5)*2.5} lb`;return`Repeat ${Math.round(w/2.5)*2.5} lb and add reps`}
 
 function makeSet(b){
-  return {weight:b.weight||'',reps:b.reps||'',done:false,restSec:data.settings.rest||90,timerEnd:null};
+  return {weight:b.weight||'',reps:b.reps||'',done:false,restSec:data.settings.rest||90,timerEnd:null,timerDuration:null};
 }
 function make(n){
   let b=best(n);
@@ -34,26 +34,38 @@ function startSetTimer(eIdx, sIdx){
   if(activeTimers[timerKey]) clearInterval(activeTimers[timerKey]);
   
   let duration = Math.max(5, +set.restSec || 90);
+  set.timerDuration = duration;
   set.timerEnd = Date.now() + duration * 1000;
   
   activeTimers[timerKey] = setInterval(()=>{
     let el = $(`timer-${eIdx}-${sIdx}`);
+    let barEl = $(`timerBar-${eIdx}-${sIdx}`);
     let left = Math.max(0, set.timerEnd - Date.now());
+    let pct = (left / (set.timerDuration * 1000)) * 100;
+    
     if(el){
       el.textContent = new Date(left).toISOString().slice(14,19);
       el.classList.add('running');
     }
+    if(barEl){
+      barEl.style.width = `${pct}%`;
+    }
+    
     if(left <= 0){
       clearInterval(activeTimers[timerKey]);
       delete activeTimers[timerKey];
       set.timerEnd = null;
+      set.timerDuration = null;
       if(el){
         el.textContent = 'GO!';
         el.classList.remove('running');
       }
+      if(barEl){
+        barEl.style.width = '0%';
+      }
       navigator.vibrate?.([200,100,200]);
     }
-  }, 200);
+  }, 100);
 }
 
 function stopSetTimer(eIdx, sIdx){
@@ -62,13 +74,17 @@ function stopSetTimer(eIdx, sIdx){
     clearInterval(activeTimers[timerKey]);
     delete activeTimers[timerKey];
   }
-  cur.exercises[eIdx].sets[sIdx].timerEnd = null;
+  let set = cur.exercises[eIdx].sets[sIdx];
+  set.timerEnd = null;
+  set.timerDuration = null;
+  let barEl = $(`timerBar-${eIdx}-${sIdx}`);
+  if(barEl) barEl.style.width = '0%';
 }
 
 function workout(){
   let s=$('routineSelect');s.innerHTML=Object.keys(data.routines).map(r=>`<option>${esc(r)}</option>`).join('');s.value=cur.routine;
   if(!cur.exercises.length)cur.exercises=data.routines[cur.routine].map(make);
-  $('routineSummary').textContent=`${cur.exercises.length} exercises • Per-set rest timers + progression suggestions`;
+  $('routineSummary').textContent=`${cur.exercises.length} exercises • Visual rest countdown bars + progression suggestions`;
   
   $('exerciseList').innerHTML=cur.exercises.map((e,i)=>{
     let b=best(e.name),inf=info(e.name);
@@ -77,6 +93,8 @@ function workout(){
       <div class="exerciseMeta"><span>Best ${b.weight||0} lb × ${b.reps||0}</span><span>${esc(suggest(e.name))}</span></div>
       <div class="sets">${e.sets.map((x,j)=>{
         let timeStr = x.timerEnd ? new Date(Math.max(0, x.timerEnd - Date.now())).toISOString().slice(14,19) : new Date((+x.restSec||90)*1000).toISOString().slice(14,19);
+        let barPct = (x.timerEnd && x.timerDuration) ? Math.max(0, ((x.timerEnd - Date.now()) / (x.timerDuration * 1000)) * 100) : 0;
+        
         return `<div class="setBlock ${x.done?'done':''}">
           <div class="setRow">
             <span class="setNum">${j+1}</span>
@@ -84,6 +102,7 @@ function workout(){
             <input data-e="${i}" data-s="${j}" data-f="reps" type="number" value="${x.reps}" placeholder="reps">
             <button class="complete ${x.done?'done':''}" data-c="${i}" data-s="${j}">✓</button>
           </div>
+          <div class="progressTrack"><div id="timerBar-${i}-${j}" class="progressBar" style="width:${barPct}%"></div></div>
           <div class="setTimerRow">
             <span class="muted small">Rest</span>
             <input class="restInput" data-e="${i}" data-s="${j}" type="number" min="5" step="5" value="${x.restSec||90}">
