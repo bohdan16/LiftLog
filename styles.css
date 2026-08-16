@@ -49,13 +49,26 @@
   color: #0b0f17;
 }
 
+.progressTrack {
+  height: 4px;
+  background: #18202d;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.progressBar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #7180bd, #aebcff);
+  transition: width 0.1s linear;
+}
+
 .setTimerRow {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px dashed #1f2733;
+  padding-top: 4px;
 }
 .restInput {
   width: 48px;
