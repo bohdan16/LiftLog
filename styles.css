@@ -1,4 +1,146 @@
-*{box-sizing:border-box}body{margin:0;background:#0b0f17;color:#f5f7fb;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;padding-bottom:92px}button,input,select,textarea{font:inherit}button{cursor:pointer}.topbar{display:flex;justify-content:space-between;align-items:center;padding:calc(16px + env(safe-area-inset-top)) 18px 12px;position:sticky;top:0;background:rgba(11,15,23,.94);backdrop-filter:blur(18px);z-index:5}.eyebrow{font-size:10px;letter-spacing:1.5px;color:#8d99aa;font-weight:700}.titleRow{display:flex;align-items:center;gap:8px}h1{margin:3px 0;font-size:28px}.versionBadge{font-size:11px;font-weight:700;color:#aebcff;background:#1a2332;border:1px solid #303b4d;padding:2px 7px;border-radius:10px}h2{font-size:20px;margin:0}h3{margin:0}.screen{display:none;padding:8px 16px 30px;max-width:760px;margin:auto}.screen.active{display:block}.card{background:#151b26;border:1px solid #252f3e;border-radius:18px;padding:16px}.hero{display:flex;justify-content:space-between;align-items:center;margin:8px 0 14px}.big{font-size:25px;font-weight:750;margin:4px 0}.heroStat{text-align:right}.heroStat strong{display:block;font-size:25px}.goalbar{width:120px;height:6px;background:#293241;border-radius:99px;overflow:hidden;margin:7px 0 3px auto}.goalbar i{display:block;height:100%;width:0;background:#aebcff}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.action{text-align:left;color:#fff;min-height:88px}.action b{display:block;font-size:16px;margin-bottom:7px}.action span{color:#8995a6;font-size:13px}.sectionTitle{display:flex;justify-content:space-between;align-items:center;margin:24px 2px 10px;gap:10px}.sectionTitle select,.card select{max-width:100%;background:#0d121b;color:#fff;border:1px solid #303a49;border-radius:10px;padding:8px}.textBtn,.ghost{background:none;border:0;color:#aebcff;font-weight:650}.ghost{border:1px solid #303b4d;border-radius:12px;padding:8px 12px}.hidden{display:none!important}.chartCard{padding:10px}.stack{display:grid;gap:10px}.exercise{padding:14px}.exerciseHead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:7px}.exerciseMeta{display:flex;justify-content:space-between;gap:8px;color:#8995a6;font-size:12px;margin-bottom:10px}.sets{display:grid;gap:10px}
+*{box-sizing:border-box}body{margin:0;background:#0b0f17;color:#f5f7fb;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;padding-bottom:92px}button,input,select,textarea{font:inherit}button{cursor:pointer}.topbar{display:flex;justify-content:space-between;align-items:center;padding:calc(16px + env(safe-area-inset-top)) 18px 12px;position:sticky;top:0;background:rgba(11,15,23,.94);backdrop-filter:blur(18px);z-index:5}.eyebrow{font-size:10px;letter-spacing:1.5px;color:#8d99aa;font-weight:700}.titleRow{display:flex;align-items:center;gap:8px}h1{margin:3px 0;font-size:28px}.versionBadge{font-size:11px;font-weight:700;color:#aebcff;background:#1a2332;border:1px solid #303b4d;padding:2px 7px;border-radius:10px}h2{font-size:20px;margin:0}h3{margin:0}
+
+.screen {
+  display: none;
+  padding: 12px 16px 36px;
+  max-width: 760px;
+  margin: auto;
+  min-height: calc(100vh - 170px);
+}
+.screen.active {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  background: #151b26;
+  border: 1px solid #252f3e;
+  border-radius: 18px;
+  padding: 16px;
+}
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0;
+}
+.big {
+  font-size: 25px;
+  font-weight: 750;
+  margin: 4px 0;
+}
+.heroStat {
+  text-align: right;
+}
+.heroStat strong {
+  display: block;
+  font-size: 25px;
+}
+.goalbar {
+  width: 120px;
+  height: 6px;
+  background: #293241;
+  border-radius: 99px;
+  overflow: hidden;
+  margin: 7px 0 3px auto;
+}
+.goalbar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #aebcff;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.action {
+  text-align: left;
+  color: #fff;
+  min-height: 80px;
+}
+.action b {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.action span {
+  color: #8995a6;
+  font-size: 12px;
+}
+
+.sectionTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 2px 0px;
+  gap: 10px;
+}
+.sectionTitle select, .card select {
+  max-width: 100%;
+  background: #0d121b;
+  color: #fff;
+  border: 1px solid #303a49;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.textBtn, .ghost {
+  background: none;
+  border: 0;
+  color: #aebcff;
+  font-weight: 650;
+}
+.ghost {
+  border: 1px solid #303b4d;
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+.hidden {
+  display: none !important;
+}
+
+.chartCard {
+  padding: 12px;
+  max-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chartCard canvas {
+  width: 100% !important;
+  max-height: 130px !important;
+}
+
+.stack {
+  display: grid;
+  gap: 10px;
+}
+.exercise {
+  padding: 14px;
+}
+.exerciseHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.exerciseMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #8995a6;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.sets {
+  display: grid;
+  gap: 10px;
+}
 
 .setBlock {
   background: #0d121b;
@@ -143,12 +285,12 @@
   display: grid;
   gap: 8px;
 }
-.form label,.card>label,.subform label {
+.form label, .card>label, .subform label {
   font-size: 13px;
   color: #a8b3c3;
   margin-top: 5px;
 }
-.form input,.form select,.form textarea,.inline input {
+.form input, .form select, .form textarea, .inline input {
   background: #0d121b;
   color: #fff;
   border: 1px solid #303a49;
@@ -174,7 +316,7 @@
   color: #b9c5ff;
   white-space: nowrap;
 }
-.pr,.historyItem,.routineRow {
+.pr, .historyItem, .routineRow {
   display: flex;
   justify-content: space-between;
   gap: 10px;
