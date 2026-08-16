@@ -8,7 +8,7 @@ const EX={
 };
 const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Lateral Raise','Chest Fly','Triceps Pushdown'],'Push B':['Incline Machine Press','Overhead Press','Cable Lateral Raise','Chest Fly','Overhead Triceps Extension'],'Pull A':['Lat Pulldown','Seated Cable Row','Rear Delt Fly','Face Pull','Preacher Curl','Hammer Curl'],'Pull B':['Standing Cable Pullover','Machine Lat Pulldown','Seated Cable Row','Face Pull','Bent-Over Row','Preacher Curl','Hammer Curl'],'Legs':['Squat','Romanian Deadlift','Leg Press','Leg Curl','Leg Extension','Calf Raise']};
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||{workouts:[],cardio:[],routines:ROUTINES,settings:{rest:90}};
-let cur={routine:'Push A',started:Date.now(),exercises:[]},timer=null,installEvt=null,currentTimerSec=data.settings.rest||90;
+let cur={routine:'Push A',started:Date.now(),exercises:[]},activeTimers={},installEvt=null;
 const $=id=>document.getElementById(id); const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data)); const dk=d=>new Date(d).toISOString().slice(0,10); const fd=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 
@@ -19,69 +19,121 @@ function setsFor(n){let a=[];data.workouts.forEach(w=>(w.exercises||[]).filter(e
 function best(n){let a=setsFor(n);return{weight:Math.max(0,...a.map(x=>x.weight)),reps:Math.max(0,...a.map(x=>x.reps))}}
 function oneRM(n){return Math.max(0,...setsFor(n).map(x=>x.weight*(1+x.reps/30)))}
 function suggest(n){let a=setsFor(n);if(!a.length)return'First session: choose a comfortable weight';let s=a[a.length-1],w=s.weight;if(s.reps>=12)return`Next: ${Math.round((w+5)/5)*5} lb`;if(s.reps>=10)return`Next: ${Math.round((w+2.5)/2.5)*2.5} lb`;return`Repeat ${Math.round(w/2.5)*2.5} lb and add reps`}
-function make(n){let b=best(n);return{name:n,sets:[{weight:b.weight||'',reps:b.reps||'',done:false},{weight:b.weight||'',reps:b.reps||'',done:false},{weight:b.weight||'',reps:b.reps||'',done:false}]}}
 
-function initTimerUI(){
-  if($('timerInput')){
-    $('timerInput').value=currentTimerSec;
-    $('timerInput').onchange=(e)=>{
-      currentTimerSec=Math.max(5,+$('timerInput').value||90);
-      if(!timer) $('timerValue').textContent=new Date(currentTimerSec*1000).toISOString().slice(14,19);
-    };
-  }
+function makeSet(b){
+  return {weight:b.weight||'',reps:b.reps||'',done:false,restSec:data.settings.rest||90,timerEnd:null};
+}
+function make(n){
+  let b=best(n);
+  return {name:n,sets:[makeSet(b),makeSet(b),makeSet(b)]};
 }
 
-function startRestTimer(sec){
-  clearInterval(timer);
-  let duration=sec||currentTimerSec;
-  let end=Date.now()+duration*1000;
-  $('restTimerBar').classList.add('running');
-  $('startTimerBtn').classList.add('hidden');
-  $('skipTimerBtn').classList.remove('hidden');
-  timer=setInterval(()=>{
-    let l=Math.max(0,end-Date.now());
-    $('timerValue').textContent=new Date(l).toISOString().slice(14,19);
-    if(l<=0){
-      clearInterval(timer);
-      timer=null;
-      $('timerValue').textContent='GO!';
-      $('restTimerBar').classList.remove('running');
-      $('startTimerBtn').classList.remove('hidden');
-      $('skipTimerBtn').classList.add('hidden');
+function startSetTimer(eIdx, sIdx){
+  let set = cur.exercises[eIdx].sets[sIdx];
+  let timerKey = `${eIdx}-${sIdx}`;
+  if(activeTimers[timerKey]) clearInterval(activeTimers[timerKey]);
+  
+  let duration = Math.max(5, +set.restSec || 90);
+  set.timerEnd = Date.now() + duration * 1000;
+  
+  activeTimers[timerKey] = setInterval(()=>{
+    let el = $(`timer-${eIdx}-${sIdx}`);
+    let left = Math.max(0, set.timerEnd - Date.now());
+    if(el){
+      el.textContent = new Date(left).toISOString().slice(14,19);
+      el.classList.add('running');
+    }
+    if(left <= 0){
+      clearInterval(activeTimers[timerKey]);
+      delete activeTimers[timerKey];
+      set.timerEnd = null;
+      if(el){
+        el.textContent = 'GO!';
+        el.classList.remove('running');
+      }
       navigator.vibrate?.([200,100,200]);
     }
-  },200);
+  }, 200);
 }
 
-$('startTimerBtn').onclick=()=>startRestTimer(currentTimerSec);
-$('skipTimerBtn').onclick=()=>{
-  clearInterval(timer);
-  timer=null;
-  $('restTimerBar').classList.remove('running');
-  $('startTimerBtn').classList.remove('hidden');
-  $('skipTimerBtn').classList.add('hidden');
-  $('timerValue').textContent=new Date(currentTimerSec*1000).toISOString().slice(14,19);
-};
+function stopSetTimer(eIdx, sIdx){
+  let timerKey = `${eIdx}-${sIdx}`;
+  if(activeTimers[timerKey]){
+    clearInterval(activeTimers[timerKey]);
+    delete activeTimers[timerKey];
+  }
+  cur.exercises[eIdx].sets[sIdx].timerEnd = null;
+}
 
 function workout(){
-  initTimerUI();
   let s=$('routineSelect');s.innerHTML=Object.keys(data.routines).map(r=>`<option>${esc(r)}</option>`).join('');s.value=cur.routine;
   if(!cur.exercises.length)cur.exercises=data.routines[cur.routine].map(make);
-  $('routineSummary').textContent=`${cur.exercises.length} exercises • Previous bests + progression suggestions`;
+  $('routineSummary').textContent=`${cur.exercises.length} exercises • Per-set rest timers + progression suggestions`;
+  
   $('exerciseList').innerHTML=cur.exercises.map((e,i)=>{
     let b=best(e.name),inf=info(e.name);
-    return `<div class="card exercise"><div class="exerciseHead"><b>${esc(e.name)}${e.superset?' • SUPERSET':''}</b><span class="pill">${esc(inf[0])}</span></div><div class="exerciseMeta"><span>Best ${b.weight||0} lb × ${b.reps||0}</span><span>${esc(suggest(e.name))}</span></div><div class="sets">${e.sets.map((x,j)=>`<div class="setRow ${x.done?'done':''}"><span class="setNum">${j+1}</span><input data-e="${i}" data-s="${j}" data-f="weight" type="number" value="${x.weight}" placeholder="lb"><input data-e="${i}" data-s="${j}" data-f="reps" type="number" value="${x.reps}" placeholder="reps"><button class="complete ${x.done?'done':''}" data-c="${i}" data-s="${j}">✓</button></div>`).join('')}</div><div class="exerciseTools"><button data-sub="${i}">Substitute</button><button data-sup="${i}">Superset</button><button data-rem="${i}">Remove</button></div><button class="addSet" data-add="${i}">+ Add set</button></div>`
+    return `<div class="card exercise">
+      <div class="exerciseHead"><b>${esc(e.name)}${e.superset?' • SUPERSET':''}</b><span class="pill">${esc(inf[0])}</span></div>
+      <div class="exerciseMeta"><span>Best ${b.weight||0} lb × ${b.reps||0}</span><span>${esc(suggest(e.name))}</span></div>
+      <div class="sets">${e.sets.map((x,j)=>{
+        let timeStr = x.timerEnd ? new Date(Math.max(0, x.timerEnd - Date.now())).toISOString().slice(14,19) : new Date((+x.restSec||90)*1000).toISOString().slice(14,19);
+        return `<div class="setBlock ${x.done?'done':''}">
+          <div class="setRow">
+            <span class="setNum">${j+1}</span>
+            <input data-e="${i}" data-s="${j}" data-f="weight" type="number" value="${x.weight}" placeholder="lb">
+            <input data-e="${i}" data-s="${j}" data-f="reps" type="number" value="${x.reps}" placeholder="reps">
+            <button class="complete ${x.done?'done':''}" data-c="${i}" data-s="${j}">✓</button>
+          </div>
+          <div class="setTimerRow">
+            <span class="muted small">Rest</span>
+            <input class="restInput" data-e="${i}" data-s="${j}" type="number" min="5" step="5" value="${x.restSec||90}">
+            <span class="muted small">s</span>
+            <span id="timer-${i}-${j}" class="setTimerDisplay ${x.timerEnd?'running':''}">${timeStr}</span>
+            <button class="timerBtn ghost" data-tstart="${i}" data-ts="${j}">${x.timerEnd?'Skip':'Start'}</button>
+          </div>
+        </div>`
+      }).join('')}</div>
+      <div class="exerciseTools"><button data-sub="${i}">Substitute</button><button data-sup="${i}">Superset</button><button data-rem="${i}">Remove</button></div>
+      <button class="addSet" data-add="${i}">+ Add set</button>
+    </div>`
   }).join('');
 
-  $('exerciseList').querySelectorAll('input').forEach(x=>x.oninput=()=>cur.exercises[+x.dataset.e].sets[+x.dataset.s][x.dataset.f]=x.value);
-  $('exerciseList').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
-    let x=cur.exercises[+b.dataset.c].sets[+b.dataset.s];
-    if(!(+x.weight&&+x.reps))return alert('Enter weight and reps first.');
-    x.done=!x.done;
-    if(x.done) startRestTimer(currentTimerSec);
+  $('exerciseList').querySelectorAll('input[data-f]').forEach(x=>x.oninput=()=>cur.exercises[+x.dataset.e].sets[+x.dataset.s][x.dataset.f]=x.value);
+  $('exerciseList').querySelectorAll('.restInput').forEach(x=>x.onchange=()=>{
+    let val = Math.max(5, +x.value || 90);
+    cur.exercises[+x.dataset.e].sets[+x.dataset.s].restSec = val;
     workout();
   });
-  $('exerciseList').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{cur.exercises[+b.dataset.add].sets.push({weight:'',reps:'',done:false});workout()});
+
+  $('exerciseList').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
+    let eIdx = +b.dataset.c, sIdx = +b.dataset.s;
+    let x = cur.exercises[eIdx].sets[sIdx];
+    if(!(+x.weight&&+x.reps))return alert('Enter weight and reps first.');
+    x.done = !x.done;
+    if(x.done){
+      startSetTimer(eIdx, sIdx);
+    } else {
+      stopSetTimer(eIdx, sIdx);
+    }
+    workout();
+  });
+
+  $('exerciseList').querySelectorAll('[data-tstart]').forEach(b=>b.onclick=()=>{
+    let eIdx = +b.dataset.tstart, sIdx = +b.dataset.ts;
+    let x = cur.exercises[eIdx].sets[sIdx];
+    if(x.timerEnd){
+      stopSetTimer(eIdx, sIdx);
+    } else {
+      startSetTimer(eIdx, sIdx);
+    }
+    workout();
+  });
+
+  $('exerciseList').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{
+    let bst = best(cur.exercises[+b.dataset.add].name);
+    cur.exercises[+b.dataset.add].sets.push(makeSet(bst));
+    workout();
+  });
   $('exerciseList').querySelectorAll('[data-rem]').forEach(b=>b.onclick=()=>{cur.exercises.splice(+b.dataset.rem,1);workout()});
   $('exerciseList').querySelectorAll('[data-sup]').forEach(b=>b.onclick=()=>{let e=cur.exercises[+b.dataset.sup];e.superset=!e.superset;workout()});
   $('exerciseList').querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{let i=+b.dataset.sub,a=info(cur.exercises[i].name)[1];if(!a.length)return alert('No substitution listed.');let n=prompt('Choose:\n'+a.map((x,j)=>`${j+1}. ${x}`).join('\n'));n=a[(+n||1)-1];if(n){cur.exercises[i].name=n;workout()}});
@@ -111,6 +163,6 @@ function updateProgress(n){let a=setsFor(n),b=best(n),rm=oneRM(n),vol=a.reduce((
 function history(){let all=[...data.workouts.map(x=>({...x,type:'Workout'})),...data.cardio.map(x=>({...x,type:'Cardio'}))].sort((a,b)=>new Date(b.date)-new Date(a.date));$('historyList').innerHTML=all.map(x=>x.type==='Workout'?`<div class="card historyItem"><span><b>${esc(x.routine)}</b><br><span class="muted small">${fd(x.date)} • ${x.durationMin} min • ${Math.round(x.volume||0).toLocaleString()} lb volume</span></span><span class="pill">${x.exercises.reduce((a,e)=>a+e.sets.length,0)} sets</span></div>`:`<div class="card historyItem"><span><b>${esc(x.activity)}</b><br><span class="muted small">${fd(x.date)} • ${x.duration} min</span></span><span class="pill">${x.calories||0} kcal</span></div>`).join('')||'<div class="empty">No history yet.</div>'}
 $('clearHistory').onclick=()=>{if(confirm('Clear workout and cardio history?')){data.workouts=[];data.cardio=[];save();history();dashboard();progress()}};
 function settings(){$('defaultRest').value=data.settings.rest;$('routineSettings').innerHTML=Object.entries(data.routines).map(([r,e])=>`<div class="routineRow" style="padding:12px 0;border-bottom:1px solid #252e3b"><span><b>${esc(r)}</b><br><span class="muted small">${e.length} exercises</span></span><span class="pill">Built in</span></div>`).join('')}
-$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);currentTimerSec=data.settings.rest;save();alert('Rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`liftlog-backup-${dk(new Date())}.json`;a.click()};$('importData').onchange=e=>{let f=e.target.files[0],r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.workouts||!x.cardio)throw 0;data=x;data.settings=data.settings||{rest:90};save();location.reload()}catch{alert('Invalid LiftLog backup.')}};r.readAsText(f)};$('clearData').onclick=()=>{if(confirm('Delete ALL LiftLog data?')){localStorage.removeItem(KEY);location.reload()}};
+$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Default rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`liftlog-backup-${dk(new Date())}.json`;a.click()};$('importData').onchange=e=>{let f=e.target.files[0],r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.workouts||!x.cardio)throw 0;data=x;data.settings=data.settings||{rest:90};save();location.reload()}catch{alert('Invalid LiftLog backup.')}};r.readAsText(f)};$('clearData').onclick=()=>{if(confirm('Delete ALL LiftLog data?')){localStorage.removeItem(KEY);location.reload()}};
 window.addEventListener('resize',()=>{if($('dashboard').classList.contains('active'))dashboard();if($('progress').classList.contains('active'))updateProgress($('progressExercise').value)});window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('installBtn').classList.remove('hidden')});$('installBtn').onclick=async()=>{if(installEvt){installEvt.prompt();await installEvt.userChoice;installEvt=null}};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');
 dashboard();workout();cardio();progress();history();settings();
