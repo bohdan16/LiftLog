@@ -8,9 +8,10 @@ const EX={
 };
 const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Lateral Raise','Chest Fly','Triceps Pushdown'],'Push B':['Incline Machine Press','Overhead Press','Cable Lateral Raise','Chest Fly','Overhead Triceps Extension'],'Pull A':['Lat Pulldown','Seated Cable Row','Rear Delt Fly','Face Pull','Preacher Curl','Hammer Curl'],'Pull B':['Standing Cable Pullover','Machine Lat Pulldown','Seated Cable Row','Face Pull','Bent-Over Row','Preacher Curl','Hammer Curl'],'Legs':['Squat','Romanian Deadlift','Leg Press','Leg Curl','Leg Extension','Calf Raise']};
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||{workouts:[],cardio:[],routines:ROUTINES,settings:{rest:90}};
-let cur={routine:'Push A',started:Date.now(),exercises:[]},timer=null,installEvt=null;
+let cur={routine:'Push A',started:Date.now(),exercises:[]},timer=null,installEvt=null,currentTimerSec=data.settings.rest||90;
 const $=id=>document.getElementById(id); const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data)); const dk=d=>new Date(d).toISOString().slice(0,10); const fd=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+
 function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.nav===id));if(id==='dashboard')dashboard();if(id==='workout')workout();if(id==='cardio')cardio();if(id==='progress')progress();if(id==='history')history();if(id==='settings')settings();scrollTo(0,0)}
 document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));
 function info(n){return EX[n]||['Other',[]]};
@@ -19,18 +20,86 @@ function best(n){let a=setsFor(n);return{weight:Math.max(0,...a.map(x=>x.weight)
 function oneRM(n){return Math.max(0,...setsFor(n).map(x=>x.weight*(1+x.reps/30)))}
 function suggest(n){let a=setsFor(n);if(!a.length)return'First session: choose a comfortable weight';let s=a[a.length-1],w=s.weight;if(s.reps>=12)return`Next: ${Math.round((w+5)/5)*5} lb`;if(s.reps>=10)return`Next: ${Math.round((w+2.5)/2.5)*2.5} lb`;return`Repeat ${Math.round(w/2.5)*2.5} lb and add reps`}
 function make(n){let b=best(n);return{name:n,sets:[{weight:b.weight||'',reps:b.reps||'',done:false},{weight:b.weight||'',reps:b.reps||'',done:false},{weight:b.weight||'',reps:b.reps||'',done:false}]}}
-function workout(){let s=$('routineSelect');s.innerHTML=Object.keys(data.routines).map(r=>`<option>${esc(r)}</option>`).join('');s.value=cur.routine;if(!cur.exercises.length)cur.exercises=data.routines[cur.routine].map(make);$('routineSummary').textContent=`${cur.exercises.length} exercises • Previous bests + progression suggestions`;$('exerciseList').innerHTML=cur.exercises.map((e,i)=>{let b=best(e.name),inf=info(e.name);return `<div class="card exercise"><div class="exerciseHead"><b>${esc(e.name)}${e.superset?' • SUPerset':''}</b><span class="pill">${esc(inf[0])}</span></div><div class="exerciseMeta"><span>Best ${b.weight||0} lb × ${b.reps||0}</span><span>${esc(suggest(e.name))}</span></div><div class="sets">${e.sets.map((x,j)=>`<div class="setRow ${x.done?'done':''}"><span class="setNum">${j+1}</span><input data-e="${i}" data-s="${j}" data-f="weight" type="number" value="${x.weight}" placeholder="lb"><input data-e="${i}" data-s="${j}" data-f="reps" type="number" value="${x.reps}" placeholder="reps"><button class="complete ${x.done?'done':''}" data-c="${i}" data-s="${j}">✓</button></div>`).join('')}</div><div class="exerciseTools"><button data-sub="${i}">Substitute</button><button data-sup="${i}">Superset</button><button data-rem="${i}">Remove</button></div><button class="addSet" data-add="${i}">+ Add set</button></div>`}).join('');
-$('exerciseList').querySelectorAll('input').forEach(x=>x.oninput=()=>cur.exercises[+x.dataset.e].sets[+x.dataset.s][x.dataset.f]=x.value);
-$('exerciseList').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{let x=cur.exercises[+b.dataset.c].sets[+b.dataset.s];if(!(+x.weight&&+x.reps))return alert('Enter weight and reps first.');x.done=!x.done;if(x.done)restTimer(data.settings.rest);workout()});
-$('exerciseList').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{cur.exercises[+b.dataset.add].sets.push({weight:'',reps:'',done:false});workout()});
-$('exerciseList').querySelectorAll('[data-rem]').forEach(b=>b.onclick=()=>{cur.exercises.splice(+b.dataset.rem,1);workout()});
-$('exerciseList').querySelectorAll('[data-sup]').forEach(b=>b.onclick=()=>{let e=cur.exercises[+b.dataset.sup];e.superset=!e.superset;workout()});
-$('exerciseList').querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{let i=+b.dataset.sub,a=info(cur.exercises[i].name)[1];if(!a.length)return alert('No substitution listed.');let n=prompt('Choose:\n'+a.map((x,j)=>`${j+1}. ${x}`).join('\n'));n=a[(+n||1)-1];if(n){cur.exercises[i].name=n;workout()}});
-$('setsCompleted').textContent=cur.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);s.onchange=()=>{cur={routine:s.value,started:Date.now(),exercises:[]};workout()}}
+
+function initTimerUI(){
+  if($('timerInput')){
+    $('timerInput').value=currentTimerSec;
+    $('timerInput').onchange=(e)=>{
+      currentTimerSec=Math.max(5,+$('timerInput').value||90);
+      if(!timer) $('timerValue').textContent=new Date(currentTimerSec*1000).toISOString().slice(14,19);
+    };
+  }
+}
+
+function startRestTimer(sec){
+  clearInterval(timer);
+  let duration=sec||currentTimerSec;
+  let end=Date.now()+duration*1000;
+  $('restTimerBar').classList.add('running');
+  $('startTimerBtn').classList.add('hidden');
+  $('skipTimerBtn').classList.remove('hidden');
+  timer=setInterval(()=>{
+    let l=Math.max(0,end-Date.now());
+    $('timerValue').textContent=new Date(l).toISOString().slice(14,19);
+    if(l<=0){
+      clearInterval(timer);
+      timer=null;
+      $('timerValue').textContent='GO!';
+      $('restTimerBar').classList.remove('running');
+      $('startTimerBtn').classList.remove('hidden');
+      $('skipTimerBtn').classList.add('hidden');
+      navigator.vibrate?.([200,100,200]);
+    }
+  },200);
+}
+
+$('startTimerBtn').onclick=()=>startRestTimer(currentTimerSec);
+$('skipTimerBtn').onclick=()=>{
+  clearInterval(timer);
+  timer=null;
+  $('restTimerBar').classList.remove('running');
+  $('startTimerBtn').classList.remove('hidden');
+  $('skipTimerBtn').classList.add('hidden');
+  $('timerValue').textContent=new Date(currentTimerSec*1000).toISOString().slice(14,19);
+};
+
+function workout(){
+  initTimerUI();
+  let s=$('routineSelect');s.innerHTML=Object.keys(data.routines).map(r=>`<option>${esc(r)}</option>`).join('');s.value=cur.routine;
+  if(!cur.exercises.length)cur.exercises=data.routines[cur.routine].map(make);
+  $('routineSummary').textContent=`${cur.exercises.length} exercises • Previous bests + progression suggestions`;
+  $('exerciseList').innerHTML=cur.exercises.map((e,i)=>{
+    let b=best(e.name),inf=info(e.name);
+    return `<div class="card exercise"><div class="exerciseHead"><b>${esc(e.name)}${e.superset?' • SUPERSET':''}</b><span class="pill">${esc(inf[0])}</span></div><div class="exerciseMeta"><span>Best ${b.weight||0} lb × ${b.reps||0}</span><span>${esc(suggest(e.name))}</span></div><div class="sets">${e.sets.map((x,j)=>`<div class="setRow ${x.done?'done':''}"><span class="setNum">${j+1}</span><input data-e="${i}" data-s="${j}" data-f="weight" type="number" value="${x.weight}" placeholder="lb"><input data-e="${i}" data-s="${j}" data-f="reps" type="number" value="${x.reps}" placeholder="reps"><button class="complete ${x.done?'done':''}" data-c="${i}" data-s="${j}">✓</button></div>`).join('')}</div><div class="exerciseTools"><button data-sub="${i}">Substitute</button><button data-sup="${i}">Superset</button><button data-rem="${i}">Remove</button></div><button class="addSet" data-add="${i}">+ Add set</button></div>`
+  }).join('');
+
+  $('exerciseList').querySelectorAll('input').forEach(x=>x.oninput=()=>cur.exercises[+x.dataset.e].sets[+x.dataset.s][x.dataset.f]=x.value);
+  $('exerciseList').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{
+    let x=cur.exercises[+b.dataset.c].sets[+b.dataset.s];
+    if(!(+x.weight&&+x.reps))return alert('Enter weight and reps first.');
+    x.done=!x.done;
+    if(x.done) startRestTimer(currentTimerSec);
+    workout();
+  });
+  $('exerciseList').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{cur.exercises[+b.dataset.add].sets.push({weight:'',reps:'',done:false});workout()});
+  $('exerciseList').querySelectorAll('[data-rem]').forEach(b=>b.onclick=()=>{cur.exercises.splice(+b.dataset.rem,1);workout()});
+  $('exerciseList').querySelectorAll('[data-sup]').forEach(b=>b.onclick=()=>{let e=cur.exercises[+b.dataset.sup];e.superset=!e.superset;workout()});
+  $('exerciseList').querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{let i=+b.dataset.sub,a=info(cur.exercises[i].name)[1];if(!a.length)return alert('No substitution listed.');let n=prompt('Choose:\n'+a.map((x,j)=>`${j+1}. ${x}`).join('\n'));n=a[(+n||1)-1];if(n){cur.exercises[i].name=n;workout()}});
+  $('setsCompleted').textContent=cur.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
+  s.onchange=()=>{cur={routine:s.value,started:Date.now(),exercises:[]};workout()};
+}
+
 $('newWorkout').onclick=()=>{cur={routine:$('routineSelect').value||'Push A',started:Date.now(),exercises:[]};workout()};
-$('finishWorkout').onclick=()=>{let ex=cur.exercises.map(e=>({...e,sets:e.sets.filter(s=>s.done)})).filter(e=>e.sets.length);if(!ex.length)return alert('Complete at least one set first.');let vol=ex.reduce((a,e)=>a+e.sets.reduce((b,s)=>b+(+s.weight||0)*(+s.reps||0),0),0);data.workouts.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex});save();cur={routine:cur.routine,started:Date.now(),exercises:[]};alert('Workout saved!');nav('dashboard')};
-function restTimer(sec){clearInterval(timer);let end=Date.now()+sec*1000;$('timerModal').classList.remove('hidden');timer=setInterval(()=>{let l=Math.max(0,end-Date.now());$('timerValue').textContent=new Date(l).toISOString().slice(14,19);if(l<=0){clearInterval(timer);$('timerValue').textContent='GO!';navigator.vibrate?.([200,100,200])}},200)}$('skipTimer').onclick=()=>{$('timerModal').classList.add('hidden');clearInterval(timer)};
+$('finishWorkout').onclick=()=>{
+  let ex=cur.exercises.map(e=>({...e,sets:e.sets.filter(s=>s.done)})).filter(e=>e.sets.length);
+  if(!ex.length)return alert('Complete at least one set first.');
+  let vol=ex.reduce((a,e)=>a+e.sets.reduce((b,s)=>b+(+s.weight||0)*(+s.reps||0),0),0);
+  data.workouts.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex});
+  save();cur={routine:cur.routine,started:Date.now(),exercises:[]};alert('Workout saved!');nav('dashboard');
+};
+
 setInterval(()=>{if($('workout').classList.contains('active')){let s=Math.floor((Date.now()-cur.started)/1000);$('workoutClock').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}},1000);
+
 function cardio(){let a=$('cardioActivity').value;$('treadmillFields').classList.toggle('hidden',a!=='Treadmill');$('stairFields').classList.toggle('hidden',a!=='StairMaster');$('cardioHistory').innerHTML=data.cardio.slice(0,10).map(c=>`<div class="card historyItem"><div><b>${esc(c.activity)}</b><span class="muted small">${fd(c.date)} • ${c.duration} min</span></div><b>${c.calories||0} kcal</b></div>`).join('')||'<div class="empty">No cardio logged yet.</div>'}
 $('cardioActivity').onchange=cardio;$('saveCardio').onclick=()=>{let c={id:crypto.randomUUID(),date:new Date().toISOString(),activity:$('cardioActivity').value,duration:+$('cardioDuration').value||0,calories:+$('cardioCalories').value||0,speed:+$('speed').value||0,incline:+$('incline').value||0,level:+$('stairLevel').value||0,notes:$('cardioNotes').value};if(!c.duration)return alert('Enter duration.');data.cardio.unshift(c);save();['cardioDuration','cardioCalories','speed','incline','stairLevel','cardioNotes'].forEach(id=>$(id).value='');cardio();dashboard()};
 function week(){let d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));let e=new Date(d);e.setDate(e.getDate()+7);let w=data.workouts.filter(x=>new Date(x.date)>=d&&new Date(x.date)<e),c=data.cardio.filter(x=>new Date(x.date)>=d&&new Date(x.date)<e);return{w,c,vol:w.reduce((a,x)=>a+(+x.volume||0),0),cal:c.reduce((a,x)=>a+(+x.calories||0),0)}}
@@ -42,5 +111,6 @@ function updateProgress(n){let a=setsFor(n),b=best(n),rm=oneRM(n),vol=a.reduce((
 function history(){let all=[...data.workouts.map(x=>({...x,type:'Workout'})),...data.cardio.map(x=>({...x,type:'Cardio'}))].sort((a,b)=>new Date(b.date)-new Date(a.date));$('historyList').innerHTML=all.map(x=>x.type==='Workout'?`<div class="card historyItem"><span><b>${esc(x.routine)}</b><br><span class="muted small">${fd(x.date)} • ${x.durationMin} min • ${Math.round(x.volume||0).toLocaleString()} lb volume</span></span><span class="pill">${x.exercises.reduce((a,e)=>a+e.sets.length,0)} sets</span></div>`:`<div class="card historyItem"><span><b>${esc(x.activity)}</b><br><span class="muted small">${fd(x.date)} • ${x.duration} min</span></span><span class="pill">${x.calories||0} kcal</span></div>`).join('')||'<div class="empty">No history yet.</div>'}
 $('clearHistory').onclick=()=>{if(confirm('Clear workout and cardio history?')){data.workouts=[];data.cardio=[];save();history();dashboard();progress()}};
 function settings(){$('defaultRest').value=data.settings.rest;$('routineSettings').innerHTML=Object.entries(data.routines).map(([r,e])=>`<div class="routineRow" style="padding:12px 0;border-bottom:1px solid #252e3b"><span><b>${esc(r)}</b><br><span class="muted small">${e.length} exercises</span></span><span class="pill">Built in</span></div>`).join('')}
-$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`liftlog-backup-${dk(new Date())}.json`;a.click()};$('importData').onchange=e=>{let f=e.target.files[0],r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.workouts||!x.cardio)throw 0;data=x;data.settings=data.settings||{rest:90};save();location.reload()}catch{alert('Invalid LiftLog backup.')}};r.readAsText(f)};$('clearData').onclick=()=>{if(confirm('Delete ALL LiftLog data?')){localStorage.removeItem(KEY);location.reload()}};
-window.addEventListener('resize',()=>{if($('dashboard').classList.contains('active'))dashboard();if($('progress').classList.contains('active'))updateProgress($('progressExercise').value)});window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('installBtn').classList.remove('hidden')});$('installBtn').onclick=async()=>{if(installEvt){installEvt.prompt();await installEvt.userChoice;installEvt=null}};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');dashboard();workout();cardio();progress();history();settings();
+$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);currentTimerSec=data.settings.rest;save();alert('Rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`liftlog-backup-${dk(new Date())}.json`;a.click()};$('importData').onchange=e=>{let f=e.target.files[0],r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.workouts||!x.cardio)throw 0;data=x;data.settings=data.settings||{rest:90};save();location.reload()}catch{alert('Invalid LiftLog backup.')}};r.readAsText(f)};$('clearData').onclick=()=>{if(confirm('Delete ALL LiftLog data?')){localStorage.removeItem(KEY);location.reload()}};
+window.addEventListener('resize',()=>{if($('dashboard').classList.contains('active'))dashboard();if($('progress').classList.contains('active'))updateProgress($('progressExercise').value)});window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('installBtn').classList.remove('hidden')});$('installBtn').onclick=async()=>{if(installEvt){installEvt.prompt();await installEvt.userChoice;installEvt=null}};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');
+dashboard();workout();cardio();progress();history();settings();
