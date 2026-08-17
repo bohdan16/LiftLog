@@ -110,6 +110,66 @@ h3{margin:0}
   grid-template-columns:1fr 1fr;
   gap:12px;
 }
+.routineCard{
+  text-align:left;
+  color:#fff;
+  min-height:74px;
+  border:1px solid var(--card-border);
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:3px;
+}
+.routineCard b{
+  font-size:14px;
+}
+.routineCard span{
+  color:var(--muted);
+  font-size:12px;
+}
+.routineCard.selected{
+  border-color:var(--accent);
+  background:linear-gradient(180deg,rgba(174,188,255,.10),rgba(174,188,255,.03));
+  box-shadow:0 0 0 1px var(--accent) inset;
+}
+.routineCard.selected span{
+  color:var(--accent);
+}
+.routineCard.editing{
+  border-style:dashed;
+  border-color:var(--muted-2);
+}
+.routineCard.editing b{
+  color:var(--accent);
+}
+.pickerGroup{
+  margin-bottom:4px;
+}
+.pickerGroupLabel{
+  color:var(--accent);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.4px;
+  text-transform:uppercase;
+  margin:10px 0 4px;
+}
+.checkRow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px 4px;
+  border-bottom:1px solid #1c2431;
+  font-size:14px;
+}
+.checkRow:last-child{
+  border-bottom:0;
+}
+.checkRow input[type="checkbox"]{
+  width:18px;
+  height:18px;
+  accent-color:var(--accent);
+  flex:none;
+}
 .action{
   text-align:left;
   color:#fff;
@@ -176,9 +236,15 @@ h3{margin:0}
   align-items:center;
   justify-content:center;
 }
+.chartCard.tall{
+  max-height:240px;
+}
 .chartCard canvas{
   width:100%!important;
   max-height:110px!important;
+}
+.chartCard.tall canvas{
+  max-height:220px!important;
 }
 
 .stack{
