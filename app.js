@@ -4,11 +4,18 @@ const EX={
 'Incline Machine Press':['Chest',['Incline Dumbbell Press']],'Overhead Triceps Extension':['Triceps',['Triceps Pushdown']],
 'Lat Pulldown':['Back',['Assisted Pull-Up']],'Seated Cable Row':['Back',['Chest-Supported Row']],'Rear Delt Fly':['Rear Delts',['Reverse Pec Deck']],'Face Pull':['Rear Delts',['Cable Rear Delt Row']],'Preacher Curl':['Biceps',['Incline Dumbbell Curl']],'Hammer Curl':['Biceps',['Rope Hammer Curl']],
 'Standing Cable Pullover':['Back',['Straight-Arm Pulldown']],'Machine Lat Pulldown':['Back',['Lat Pulldown']],'Bent-Over Row':['Back',['Chest-Supported Row']],
-'Squat':['Quads',['Leg Press']],'Romanian Deadlift':['Hamstrings',['Leg Curl']],'Leg Press':['Quads',['Squat']],'Leg Curl':['Hamstrings',['Romanian Deadlift']],'Leg Extension':['Quads',['Reverse Lunge']],'Calf Raise':['Calves',['Seated Calf Raise']]
+'Squat':['Quads',['Leg Press','Deadlift','Hack Squat']],'Deadlift':['Hamstrings',['Leg Press','Hack Squat']],'Romanian Deadlift':['Hamstrings',['Leg Curl']],'Leg Press':['Quads',['Deadlift','Hack Squat']],'Hack Squat':['Quads',['Leg Press','Deadlift']],'Leg Curl':['Hamstrings',['Romanian Deadlift']],'Leg Extension':['Quads',['Squat','Leg Press']],'Calf Raise':['Calves',['Seated Calf Raise']]
 };
-const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Lateral Raise','Chest Fly','Triceps Pushdown'],'Push B':['Incline Machine Press','Overhead Press','Cable Lateral Raise','Chest Fly','Overhead Triceps Extension'],'Pull A':['Lat Pulldown','Seated Cable Row','Rear Delt Fly','Face Pull','Preacher Curl','Hammer Curl'],'Pull B':['Standing Cable Pullover','Machine Lat Pulldown','Seated Cable Row','Face Pull','Bent-Over Row','Preacher Curl','Hammer Curl'],'Legs':['Squat','Romanian Deadlift','Leg Press','Leg Curl','Leg Extension','Calf Raise']};
+const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Lateral Raise','Chest Fly','Triceps Pushdown'],'Push B':['Incline Machine Press','Overhead Press','Cable Lateral Raise','Chest Fly','Overhead Triceps Extension'],'Pull A':['Lat Pulldown','Seated Cable Row','Rear Delt Fly','Face Pull','Preacher Curl','Hammer Curl'],'Pull B':['Standing Cable Pullover','Machine Lat Pulldown','Seated Cable Row','Face Pull','Bent-Over Row','Preacher Curl','Hammer Curl'],'Legs A':['Deadlift','Leg Curl','Leg Extension','Calf Raise'],'Legs B':['Leg Press','Leg Curl','Leg Extension','Calf Raise'],'Legs C':['Hack Squat','Leg Curl','Leg Extension','Calf Raise']};
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||{workouts:[],cardio:[],routines:ROUTINES,settings:{rest:90}};
-let cur={routine:'Push A',started:Date.now(),exercises:[]},activeTimers={},installEvt=null;
+if(!data.routines['Legs A']&&!data.routines['Legs B']&&!data.routines['Legs C']){
+  delete data.routines['Legs'];
+  data.routines['Legs A']=ROUTINES['Legs A'];
+  data.routines['Legs B']=ROUTINES['Legs B'];
+  data.routines['Legs C']=ROUTINES['Legs C'];
+  localStorage.setItem(KEY,JSON.stringify(data));
+}
+let cur={routine:Object.keys(data.routines)[0]||'Push A',started:null,exercises:[],active:false},activeTimers={},installEvt=null;
 const $=id=>document.getElementById(id); const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data)); const dk=d=>new Date(d).toISOString().slice(0,10); const fd=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 
@@ -82,8 +89,23 @@ function stopSetTimer(eIdx, sIdx){
 }
 
 function workout(){
-  let s=$('routineSelect');s.innerHTML=Object.keys(data.routines).map(r=>`<option>${esc(r)}</option>`).join('');s.value=cur.routine;
-  if(!cur.exercises.length)cur.exercises=data.routines[cur.routine].map(make);
+  let s=$('routineSelect');s.innerHTML=Object.keys(data.routines).map(r=>`<option>${esc(r)}</option>`).join('');s.value=cur.routine;s.disabled=cur.active;
+  s.onchange=()=>{cur.routine=s.value;workout()};
+
+  $('startWorkoutBtn').classList.toggle('hidden',cur.active);
+  $('exerciseList').classList.toggle('hidden',!cur.active);
+  $('workoutFooter').classList.toggle('hidden',!cur.active);
+  $('finishWorkout').classList.toggle('hidden',!cur.active);
+
+  if(!cur.active){
+    let names=data.routines[cur.routine]||[];
+    $('routineSummary').textContent=`${names.length} exercises • ${names.join(', ')}`;
+    $('exerciseList').innerHTML='';
+    $('setsCompleted').textContent='0';
+    $('workoutClock').textContent='00:00';
+    return;
+  }
+
   $('routineSummary').textContent=`${cur.exercises.length} exercises • Visual rest countdown bars + progression suggestions`;
   
   $('exerciseList').innerHTML=cur.exercises.map((e,i)=>{
@@ -157,19 +179,29 @@ function workout(){
   $('exerciseList').querySelectorAll('[data-sup]').forEach(b=>b.onclick=()=>{let e=cur.exercises[+b.dataset.sup];e.superset=!e.superset;workout()});
   $('exerciseList').querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{let i=+b.dataset.sub,a=info(cur.exercises[i].name)[1];if(!a.length)return alert('No substitution listed.');let n=prompt('Choose:\n'+a.map((x,j)=>`${j+1}. ${x}`).join('\n'));n=a[(+n||1)-1];if(n){cur.exercises[i].name=n;workout()}});
   $('setsCompleted').textContent=cur.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
-  s.onchange=()=>{cur={routine:s.value,started:Date.now(),exercises:[]};workout()};
 }
 
-$('newWorkout').onclick=()=>{cur={routine:$('routineSelect').value||'Push A',started:Date.now(),exercises:[]};workout()};
+$('startWorkoutBtn').onclick=()=>{
+  let r=$('routineSelect').value;
+  if(!confirm(`Start "${r}" workout?`))return;
+  cur={routine:r,started:Date.now(),exercises:data.routines[r].map(make),active:true};
+  workout();
+};
+
+$('newWorkout').onclick=()=>{
+  if(cur.active&&!confirm('Discard current workout?'))return;
+  cur={routine:$('routineSelect').value||Object.keys(data.routines)[0],started:null,exercises:[],active:false};
+  workout();
+};
 $('finishWorkout').onclick=()=>{
   let ex=cur.exercises.map(e=>({...e,sets:e.sets.filter(s=>s.done)})).filter(e=>e.sets.length);
   if(!ex.length)return alert('Complete at least one set first.');
   let vol=ex.reduce((a,e)=>a+e.sets.reduce((b,s)=>b+(+s.weight||0)*(+s.reps||0),0),0);
   data.workouts.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex});
-  save();cur={routine:cur.routine,started:Date.now(),exercises:[]};alert('Workout saved!');nav('dashboard');
+  save();cur={routine:cur.routine,started:null,exercises:[],active:false};alert('Workout saved!');nav('dashboard');
 };
 
-setInterval(()=>{if($('workout').classList.contains('active')){let s=Math.floor((Date.now()-cur.started)/1000);$('workoutClock').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}},1000);
+setInterval(()=>{if(cur.active&&$('workout').classList.contains('active')){let s=Math.floor((Date.now()-cur.started)/1000);$('workoutClock').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}},1000);
 
 function cardio(){let a=$('cardioActivity').value;$('treadmillFields').classList.toggle('hidden',a!=='Treadmill');$('stairFields').classList.toggle('hidden',a!=='StairMaster');$('cardioHistory').innerHTML=data.cardio.slice(0,10).map(c=>`<div class="card historyItem"><div><b>${esc(c.activity)}</b><span class="muted small">${fd(c.date)} • ${c.duration} min</span></div><b>${c.calories||0} kcal</b></div>`).join('')||'<div class="empty">No cardio logged yet.</div>'}
 $('cardioActivity').onchange=cardio;$('saveCardio').onclick=()=>{let c={id:crypto.randomUUID(),date:new Date().toISOString(),activity:$('cardioActivity').value,duration:+$('cardioDuration').value||0,calories:+$('cardioCalories').value||0,speed:+$('speed').value||0,incline:+$('incline').value||0,level:+$('stairLevel').value||0,notes:$('cardioNotes').value};if(!c.duration)return alert('Enter duration.');data.cardio.unshift(c);save();['cardioDuration','cardioCalories','speed','incline','stairLevel','cardioNotes'].forEach(id=>$(id).value='');cardio();dashboard()};
