@@ -262,28 +262,69 @@ $('startWorkoutBtn').onclick=()=>{
 };
 
 $('newWorkout').onclick=()=>{
-  if(cur.active&&!confirm('Discard current workout?'))return;
-  editingRoutines=false;editingRoutineKey=null;
-  cur={routine:cur.routine||Object.keys(data.routines)[0],started:null,exercises:[],active:false};
+  let existing=cur.exercises.map(e=>e.name);
+  let options=Object.keys(EX).filter(n=>!existing.includes(n)).sort();
+  if(!options.length)return alert('All exercises already added.');
+  let choice=prompt('Add exercise:\n'+options.map((n,i)=>`${i+1}. ${n}`).join('\n'));
+  let idx=(+choice||0)-1;
+  if(idx<0||idx>=options.length)return;
+  cur.exercises.push(make(options[idx]));
   workout();
+  if(confirm('Save this as the routine template too?')){
+    data.routines[cur.routine]=cur.exercises.map(e=>e.name);
+    save();
+  }
 };
 
-function renderExercisePicker(){
+let pickerChosen=[];
+function renderExercisePicker(initial){
+  pickerChosen=[...(initial||[])];
+  drawPicker();
+}
+function drawPicker(){
+  let chosenHtml=pickerChosen.map((n,i)=>`<div class="card pickRow" data-idx="${i}" style="padding:8px 10px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="dragHandle"></span><span style="flex:1">${esc(n)}</span><button data-rmpick="${i}" class="textBtn">✕</button></div>`).join('')||`<div class="empty small">No exercises chosen yet.</div>`;
   let groups={};
-  Object.keys(EX).sort().forEach(n=>{let g=info(n)[0];(groups[g]=groups[g]||[]).push(n)});
-  $('exercisePicker').innerHTML=Object.keys(groups).sort().map(g=>`
-    <div class="pickerGroup">
-      <div class="pickerGroupLabel">${esc(g)}</div>
-      ${groups[g].map(n=>`<label class="checkRow"><input type="checkbox" value="${esc(n)}">${esc(n)}</label>`).join('')}
-    </div>`).join('');
+  Object.keys(EX).sort().forEach(n=>{if(!pickerChosen.includes(n)){let g=info(n)[0];(groups[g]=groups[g]||[]).push(n)}});
+  let addHtml=Object.keys(groups).sort().map(g=>`<div class="pickerGroup"><div class="pickerGroupLabel">${esc(g)}</div>${groups[g].map(n=>`<div class="checkRow" data-addpick="${esc(n)}" style="cursor:pointer">+ ${esc(n)}</div>`).join('')}</div>`).join('');
+  $('exercisePicker').innerHTML=`<div class="pickerGroupLabel">Chosen (drag to reorder)</div><div id="chosenList">${chosenHtml}</div><div class="pickerGroupLabel" style="margin-top:10px">Add exercises</div>${addHtml}`;
+  $('exercisePicker').querySelectorAll('[data-addpick]').forEach(el=>el.onclick=()=>{pickerChosen.push(el.dataset.addpick);drawPicker()});
+  $('exercisePicker').querySelectorAll('[data-rmpick]').forEach(el=>el.onclick=()=>{pickerChosen.splice(+el.dataset.rmpick,1);drawPicker()});
+  let list=$('chosenList');
+  list.querySelectorAll('.dragHandle').forEach(handle=>{
+    handle.onpointerdown=e=>{
+      e.preventDefault();
+      let card=handle.closest('.pickRow');
+      let startY=e.clientY;
+      try{card.setPointerCapture(e.pointerId)}catch(err){}
+      card.classList.add('dragging');
+      let onMove=ev=>{
+        let dy=ev.clientY-startY;
+        card.style.transform=`translateY(${dy}px)`;
+        let guard=0;
+        while(guard++<20){
+          let rect=card.getBoundingClientRect(),center=rect.top+rect.height/2;
+          let next=card.nextElementSibling;
+          if(next&&next.classList.contains('pickRow')){let nr=next.getBoundingClientRect();if(center>nr.top+nr.height/2){list.insertBefore(next,card);startY=ev.clientY;card.style.transform='translateY(0px)';continue}}
+          let prev=card.previousElementSibling;
+          if(prev&&prev.classList.contains('pickRow')){let pr=prev.getBoundingClientRect();if(center<pr.top+pr.height/2){list.insertBefore(card,prev);startY=ev.clientY;card.style.transform='translateY(0px)';continue}}
+          break;
+        }
+      };
+      let onUp=()=>{
+        list.removeEventListener('pointermove',onMove);list.removeEventListener('pointerup',onUp);list.removeEventListener('pointercancel',onUp);
+        let newOrder=[...list.children].filter(c=>c.classList.contains('pickRow')).map(c=>+c.dataset.idx);
+        pickerChosen=newOrder.map(i=>pickerChosen[i]);
+        drawPicker();
+      };
+      list.addEventListener('pointermove',onMove);list.addEventListener('pointerup',onUp);list.addEventListener('pointercancel',onUp);
+    };
+  });
 }
 
 function openRoutineEditor(key){
   editingRoutineKey=key;
   $('newRoutineName').value=key;
-  renderExercisePicker();
-  let picked=data.routines[key]||[];
-  $('exercisePicker').querySelectorAll('input').forEach(cb=>{cb.checked=picked.includes(cb.value)});
+  renderExercisePicker(data.routines[key]||[]);
   $('deleteRoutineBtn').classList.remove('hidden');
   $('saveAddRoutine').textContent='Save changes';
   $('addRoutineForm').classList.remove('hidden');
@@ -299,7 +340,7 @@ $('editRoutinesBtn').onclick=()=>{
 $('addRoutineBtn').onclick=()=>{
   editingRoutineKey=null;
   $('newRoutineName').value='';
-  renderExercisePicker();
+  renderExercisePicker([]);
   $('deleteRoutineBtn').classList.add('hidden');
   $('saveAddRoutine').textContent='Save routine';
   $('addRoutineForm').classList.remove('hidden');
@@ -320,7 +361,7 @@ $('deleteRoutineBtn').onclick=()=>{
 $('saveAddRoutine').onclick=()=>{
   let name=$('newRoutineName').value.trim();
   if(!name)return alert('Enter a routine name.');
-  let picked=[...$('exercisePicker').querySelectorAll('input:checked')].map(i=>i.value);
+  let picked=[...pickerChosen];
   if(!picked.length)return alert('Select at least one exercise.');
 
   if(editingRoutineKey){
