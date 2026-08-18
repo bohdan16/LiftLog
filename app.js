@@ -7,7 +7,7 @@ const EX={
 'Squat':['Quads',['Leg Press','Deadlift','Hack Squat']],'Deadlift':['Hamstrings',['Leg Press','Hack Squat']],'Romanian Deadlift':['Hamstrings',['Leg Curl']],'Leg Press':['Quads',['Deadlift','Hack Squat']],'Hack Squat':['Quads',['Leg Press','Deadlift']],'Leg Curl':['Hamstrings',['Romanian Deadlift']],'Leg Extension':['Quads',['Squat','Leg Press']],'Calf Raise':['Calves',['Seated Calf Raise']]
 };
 const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Lateral Raise','Chest Fly','Triceps Pushdown'],'Push B':['Incline Machine Press','Overhead Press','Cable Lateral Raise','Chest Fly','Overhead Triceps Extension'],'Pull A':['Lat Pulldown','Seated Cable Row','Rear Delt Fly','Face Pull','Preacher Curl','Hammer Curl'],'Pull B':['Standing Cable Pullover','Machine Lat Pulldown','Seated Cable Row','Face Pull','Bent-Over Row','Preacher Curl','Hammer Curl'],'Legs A':['Deadlift','Leg Curl','Leg Extension','Calf Raise'],'Legs B':['Leg Press','Leg Curl','Leg Extension','Calf Raise'],'Legs C':['Hack Squat','Leg Curl','Leg Extension','Calf Raise']};
-let data=JSON.parse(localStorage.getItem(KEY)||'null')||{workouts:[],cardio:[],routines:{...ROUTINES},settings:{rest:90}};
+let data=JSON.parse(localStorage.getItem(KEY)||'null')||{workouts:[],routines:{...ROUTINES},settings:{rest:90}};
 if(!data.routines['Legs A']&&!data.routines['Legs B']&&!data.routines['Legs C']){
   delete data.routines['Legs'];
   data.routines['Legs A']=ROUTINES['Legs A'];
@@ -20,7 +20,7 @@ let editingRoutines=false,editingRoutineKey=null;
 const $=id=>document.getElementById(id); const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data)); const dk=d=>new Date(d).toISOString().slice(0,10); const fd=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 
-function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.nav===id));if(id==='dashboard')dashboard();if(id==='workout')workout();if(id==='cardio')cardio();if(id==='progress')progress();if(id==='history')history();if(id==='settings')settings();scrollTo(0,0)}
+function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.nav===id));if(id==='dashboard')dashboard();if(id==='workout')workout();if(id==='performance')performance();if(id==='settings')settings();scrollTo(0,0)}
 document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));
 function info(n){return EX[n]||['Other',[]]};
 function setsFor(n){let a=[];data.workouts.forEach(w=>(w.exercises||[]).filter(e=>e.name===n).forEach(e=>(e.sets||[]).forEach(s=>{let wt=+s.weight||0,r=+s.reps||0;if(wt&&r)a.push({weight:wt,reps:r,date:w.date})})));return a}
@@ -398,9 +398,7 @@ $('cancelWorkoutBtn').onclick=()=>{
 
 setInterval(()=>{if(cur.active&&$('workout').classList.contains('active')){let s=Math.floor((Date.now()-cur.started)/1000);$('workoutClock').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}},1000);
 
-function cardio(){let a=$('cardioActivity').value;$('treadmillFields').classList.toggle('hidden',a!=='Treadmill');$('stairFields').classList.toggle('hidden',a!=='StairMaster');$('cardioHistory').innerHTML=data.cardio.slice(0,10).map(c=>`<div class="card historyItem"><div><b>${esc(c.activity)}</b><span class="muted small">${fd(c.date)} • ${c.duration} min</span></div><b>${c.calories||0} kcal</b></div>`).join('')||'<div class="empty">No cardio logged yet.</div>'}
-$('cardioActivity').onchange=cardio;$('saveCardio').onclick=()=>{let c={id:crypto.randomUUID(),date:new Date().toISOString(),activity:$('cardioActivity').value,duration:+$('cardioDuration').value||0,calories:+$('cardioCalories').value||0,speed:+$('speed').value||0,incline:+$('incline').value||0,level:+$('stairLevel').value||0,notes:$('cardioNotes').value};if(!c.duration)return alert('Enter duration.');data.cardio.unshift(c);save();['cardioDuration','cardioCalories','speed','incline','stairLevel','cardioNotes'].forEach(id=>$(id).value='');cardio();dashboard()};
-function week(){let d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));let e=new Date(d);e.setDate(e.getDate()+7);let w=data.workouts.filter(x=>new Date(x.date)>=d&&new Date(x.date)<e),c=data.cardio.filter(x=>new Date(x.date)>=d&&new Date(x.date)<e);return{w,c,vol:w.reduce((a,x)=>a+(+x.volume||0),0),cal:c.reduce((a,x)=>a+(+x.calories||0),0)}}
+function week(){let d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));let e=new Date(d);e.setDate(e.getDate()+7);let w=data.workouts.filter(x=>new Date(x.date)>=d&&new Date(x.date)<e);return{w,vol:w.reduce((a,x)=>a+(+x.volume||0),0)}}
 function chartSetup(cv){
   let ctx=cv.getContext('2d'),d=window.devicePixelRatio||1;
   let w=cv.clientWidth,h=cv.clientHeight;
@@ -422,40 +420,38 @@ function bars(cv,obj){
   let a=Object.entries(obj).sort((x,y)=>y[1]-x[1]).slice(0,8),m=Math.max(...a.map(x=>x[1]),1);
   a.forEach(([k,v],i)=>{let y=10+i*25;ctx.fillStyle='#aebcff';ctx.fillRect(115,y,(w-130)*v/m,16);ctx.fillStyle='#9aa6b8';ctx.font='12px sans-serif';ctx.fillText(k,5,y+12)});
 }
-function dashboard(){let t=week(),days=new Set(t.w.map(x=>dk(x.date)));$('weekWorkouts').textContent=`${t.w.length} workout${t.w.length===1?'':'s'}`;$('weekFrequency').textContent=`${days.size} training day${days.size===1?'':'s'}`;$('weekCalories').textContent=t.cal;$('volumeWeek').textContent=`${Math.round(t.vol).toLocaleString()} lb`;$('goalFill').style.width=Math.min(100,t.cal/1000*100)+'%';let v=[];for(let i=6;i>=0;i--){let d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-i);v.push(data.workouts.filter(w=>dk(w.date)===dk(d)).reduce((a,x)=>a+(+x.volume||0),0))}line($('volumeChart'),v);let prs=Object.keys(EX).map(n=>[n,best(n).weight]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).slice(0,5);$('prs').innerHTML=prs.map(x=>`<div class="card pr"><span><b>${esc(x[0])}</b><br><span class="muted small">Weight PR</span></span><b>${x[1]} lb</b></div>`).join('')||'<div class="empty">Complete a workout to start tracking PRs.</div>'}
-function progress(){let names=Object.keys(EX).sort();$('progressExercise').innerHTML=names.map(n=>`<option>${esc(n)}</option>`).join('');updateProgress($('progressExercise').value)}$('progressExercise').onchange=e=>updateProgress(e.target.value);
+function dashboard(){let t=week(),days=new Set(t.w.map(x=>dk(x.date)));$('weekWorkouts').textContent=`${t.w.length} workout${t.w.length===1?'':'s'}`;$('weekFrequency').textContent=`${days.size} training day${days.size===1?'':'s'}`;$('volumeWeek').textContent=`${Math.round(t.vol).toLocaleString()} lb`;let v=[];for(let i=6;i>=0;i--){let d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-i);v.push(data.workouts.filter(w=>dk(w.date)===dk(d)).reduce((a,x)=>a+(+x.volume||0),0))}line($('volumeChart'),v);let prs=Object.keys(EX).map(n=>[n,best(n).weight]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).slice(0,5);$('prs').innerHTML=prs.map(x=>`<div class="card pr"><span><b>${esc(x[0])}</b><br><span class="muted small">Weight PR</span></span><b>${x[1]} lb</b></div>`).join('')||'<div class="empty">Complete a workout to start tracking PRs.</div>'}
+function performance(){
+  let names=Object.keys(EX).sort();$('progressExercise').innerHTML=names.map(n=>`<option>${esc(n)}</option>`).join('');updateProgress($('progressExercise').value);
+  history();
+}
+$('progressExercise').onchange=e=>updateProgress(e.target.value);
+$('historyToggle').onclick=()=>{$('historyList').classList.toggle('hidden')};
 function updateProgress(n){let a=setsFor(n),b=best(n),rm=oneRM(n),vol=a.reduce((x,s)=>x+s.weight*s.reps,0);$('bestWeight').textContent=`${b.weight} lb`;$('bestReps').textContent=b.reps;$('best1rm').textContent=`${Math.round(rm)} lb`;$('exerciseVolume').textContent=`${Math.round(vol).toLocaleString()} lb`;let trend={};a.forEach(s=>trend[dk(s.date)]=Math.max(trend[dk(s.date)]||0,s.weight*(1+s.reps/30)));line($('strengthChart'),Object.values(trend).slice(-14));let mus={};data.workouts.forEach(w=>(w.exercises||[]).forEach(e=>{let m=info(e.name)[0];mus[m]=(mus[m]||0)+e.sets.reduce((q,s)=>q+(+s.weight||0)*(+s.reps||0),0)}));bars($('muscleChart'),mus);let f=[];for(let i=7;i>=0;i--){let end=new Date();end.setHours(0,0,0,0);end.setDate(end.getDate()-i*7);let start=new Date(end);start.setDate(start.getDate()-7);f.push(data.workouts.filter(w=>new Date(w.date)>=start&&new Date(w.date)<end).length)}line($('frequencyChart'),f);$('progressDetails').innerHTML=`<div class="card"><b>Progression recommendation</b><p class="muted small">${esc(suggest(n))}. Rep PRs and weight PRs are tracked independently. Estimated 1RM uses the Epley formula.</p></div>`}
 
 function history(){
-  let all=[...data.workouts.map(x=>({...x,type:'Workout'})),...data.cardio.map(x=>({...x,type:'Cardio'}))].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  let all=data.workouts.map(x=>({...x,type:'Workout'})).sort((a,b)=>new Date(b.date)-new Date(a.date));
   
   $('historyList').innerHTML=all.map((x, idx)=>{
-    if(x.type==='Workout'){
-      let exList = (x.exercises||[]).map(e=>`
-        <div class="historyExercise">
-          <div class="historyExHead"><b>${esc(e.name)}</b></div>
-          <div class="historySetsGrid">
-            ${(e.sets||[]).map((s,sIdx)=>`<span class="historySetBadge">Set ${sIdx+1}: ${s.weight}lb × ${s.reps}</span>`).join('')}
-          </div>
+    let exList = (x.exercises||[]).map(e=>`
+      <div class="historyExercise">
+        <div class="historyExHead"><b>${esc(e.name)}</b></div>
+        <div class="historySetsGrid">
+          ${(e.sets||[]).map((s,sIdx)=>`<span class="historySetBadge">Set ${sIdx+1}: ${s.weight}lb × ${s.reps}</span>`).join('')}
         </div>
-      `).join('');
-      
-      return `<div class="card historyCard">
-        <div class="historyHeader" data-htoggle="${idx}">
-          <div>
-            <b>${esc(x.routine)}</b>
-            <div class="muted small">${fd(x.date)} • ${x.durationMin} min • ${Math.round(x.volume||0).toLocaleString()} lb volume</div>
-          </div>
-          <span class="pill">${(x.exercises||[]).reduce((a,e)=>a+(e.sets||[]).length,0)} sets ▼</span>
+      </div>
+    `).join('');
+    
+    return `<div class="card historyCard">
+      <div class="historyHeader" data-htoggle="${idx}">
+        <div>
+          <b>${esc(x.routine)}</b>
+          <div class="muted small">${fd(x.date)} • ${x.durationMin} min • ${Math.round(x.volume||0).toLocaleString()} lb volume</div>
         </div>
-        <div id="hdetails-${idx}" class="historyDetails hidden">${exList}</div>
-      </div>`;
-    } else {
-      return `<div class="card historyItem">
-        <div><b>${esc(x.activity)}</b><br><span class="muted small">${fd(x.date)} • ${x.duration} min</span></div>
-        <span class="pill">${x.calories||0} kcal</span>
-      </div>`;
-    }
+        <span class="pill">${(x.exercises||[]).reduce((a,e)=>a+(e.sets||[]).length,0)} sets ▼</span>
+      </div>
+      <div id="hdetails-${idx}" class="historyDetails hidden">${exList}</div>
+    </div>`;
   }).join('')||'<div class="empty">No history yet.</div>';
 
   $('historyList').querySelectorAll('[data-htoggle]').forEach(el=>{
@@ -466,7 +462,7 @@ function history(){
   });
 }
 
-$('clearHistory').onclick=()=>{if(confirm('Clear workout and cardio history?')){data.workouts=[];data.cardio=[];save();history();dashboard();progress()}};
+$('clearHistory').onclick=()=>{if(confirm('Clear workout history?')){data.workouts=[];save();history();dashboard();performance()}};
 function settings(){
   $('defaultRest').value=data.settings.rest;
   $('routineSettings').innerHTML=Object.entries(data.routines).map(([r,e])=>{
@@ -482,13 +478,13 @@ function settings(){
     save();settings();
   });
 }
-$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Default rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`liftlog-backup-${dk(new Date())}.json`;a.click()};$('importData').onchange=e=>{let f=e.target.files[0],r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.workouts||!x.cardio)throw 0;data=x;data.settings=data.settings||{rest:90};save();location.reload()}catch{alert('Invalid LiftLog backup.')}};r.readAsText(f)};$('clearData').onclick=()=>{if(confirm('Delete ALL LiftLog data?')){localStorage.removeItem(KEY);location.reload()}};
+$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Default rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`liftlog-backup-${dk(new Date())}.json`;a.click()};$('importData').onchange=e=>{let f=e.target.files[0],r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.workouts)throw 0;data=x;data.settings=data.settings||{rest:90};save();location.reload()}catch{alert('Invalid LiftLog backup.')}};r.readAsText(f)};$('clearData').onclick=()=>{if(confirm('Delete ALL LiftLog data?')){localStorage.removeItem(KEY);location.reload()}};
 let resizeT=null;
 window.addEventListener('resize',()=>{
   clearTimeout(resizeT);
   resizeT=setTimeout(()=>{
     if($('dashboard').classList.contains('active'))dashboard();
-    if($('progress').classList.contains('active'))updateProgress($('progressExercise').value);
+    if($('performance').classList.contains('active'))updateProgress($('progressExercise').value);
   },150);
 });window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('installBtn').classList.remove('hidden')});$('installBtn').onclick=async()=>{if(installEvt){installEvt.prompt();await installEvt.userChoice;installEvt=null}};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');
-dashboard();workout();cardio();progress();history();settings();
+dashboard();workout();performance();settings();

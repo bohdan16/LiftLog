@@ -611,7 +611,7 @@ h3{margin:0}
   background:rgba(13,18,27,.96);
   border-top:1px solid #222b39;
   display:grid;
-  grid-template-columns:repeat(5,1fr);
+  grid-template-columns:repeat(3,1fr);
   z-index:10;
   backdrop-filter:blur(18px);
   -webkit-backdrop-filter:blur(18px);
