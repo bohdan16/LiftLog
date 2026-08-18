@@ -101,7 +101,7 @@ function workout(){
   $('startWorkoutBtn').classList.toggle('hidden',cur.active);
   $('exerciseList').classList.toggle('hidden',!cur.active);
   $('workoutFooter').classList.toggle('hidden',!cur.active);
-  $('finishWorkout').classList.toggle('hidden',!cur.active);
+  $('workoutEndActions').classList.toggle('hidden',!cur.active);
 
   if(!cur.active){
     $('routineGrid').innerHTML=Object.keys(data.routines).map(r=>`
@@ -125,8 +125,8 @@ function workout(){
   
   $('exerciseList').innerHTML=cur.exercises.map((e,i)=>{
     let b=best(e.name),inf=info(e.name);
-    return `<div class="card exercise">
-      <div class="exerciseHead"><b>${esc(e.name)}${e.superset?' • SUPERSET':''}</b><span class="pill">${esc(inf[0])}</span></div>
+    return `<div class="card exercise" data-idx="${i}">
+      <div class="exerciseHead"><div class="exerciseTitleRow"><span class="dragHandle"></span><b>${esc(e.name)}${e.superset?' • SUPERSET':''}</b></div><span class="pill">${esc(inf[0])}</span></div>
       <div class="exerciseMeta"><span>Best ${b.weight||0} lb × ${b.reps||0}</span><span>${esc(suggest(e.name))}</span></div>
       <div class="sets">${e.sets.map((x,j)=>{
         let timeStr = x.timerEnd ? new Date(Math.max(0, x.timerEnd - Date.now())).toISOString().slice(14,19) : new Date((+x.restSec||90)*1000).toISOString().slice(14,19);
@@ -194,6 +194,64 @@ function workout(){
   $('exerciseList').querySelectorAll('[data-sup]').forEach(b=>b.onclick=()=>{let e=cur.exercises[+b.dataset.sup];e.superset=!e.superset;workout()});
   $('exerciseList').querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{let i=+b.dataset.sub,a=info(cur.exercises[i].name)[1];if(!a.length)return alert('No substitution listed.');let n=prompt('Choose:\n'+a.map((x,j)=>`${j+1}. ${x}`).join('\n'));n=a[(+n||1)-1];if(n){cur.exercises[i].name=n;workout()}});
   $('setsCompleted').textContent=cur.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
+  initExerciseDrag();
+}
+
+function initExerciseDrag(){
+  let list=$('exerciseList');
+  list.querySelectorAll('.dragHandle').forEach(handle=>{
+    handle.onpointerdown=e=>{
+      e.preventDefault();
+      let card=handle.closest('.exercise');
+      let startY=e.clientY;
+      try{card.setPointerCapture(e.pointerId)}catch(err){}
+      card.classList.add('dragging');
+
+      let onMove=ev=>{
+        let dy=ev.clientY-startY;
+        card.style.transform=`translateY(${dy}px)`;
+        let guard=0;
+        while(guard++<20){
+          let rect=card.getBoundingClientRect();
+          let center=rect.top+rect.height/2;
+          let next=card.nextElementSibling;
+          if(next&&next.classList.contains('exercise')){
+            let nr=next.getBoundingClientRect();
+            if(center>nr.top+nr.height/2){
+              list.insertBefore(next,card);
+              startY=ev.clientY;
+              card.style.transform='translateY(0px)';
+              continue;
+            }
+          }
+          let prev=card.previousElementSibling;
+          if(prev&&prev.classList.contains('exercise')){
+            let pr=prev.getBoundingClientRect();
+            if(center<pr.top+pr.height/2){
+              list.insertBefore(card,prev);
+              startY=ev.clientY;
+              card.style.transform='translateY(0px)';
+              continue;
+            }
+          }
+          break;
+        }
+      };
+      let onUp=ev=>{
+        list.removeEventListener('pointermove',onMove);
+        list.removeEventListener('pointerup',onUp);
+        list.removeEventListener('pointercancel',onUp);
+        card.classList.remove('dragging');
+        card.style.transform='';
+        let newOrder=[...list.children].filter(c=>c.classList.contains('exercise')).map(c=>+c.dataset.idx);
+        cur.exercises=newOrder.map(i=>cur.exercises[i]);
+        workout();
+      };
+      list.addEventListener('pointermove',onMove);
+      list.addEventListener('pointerup',onUp);
+      list.addEventListener('pointercancel',onUp);
+    };
+  });
 }
 
 $('startWorkoutBtn').onclick=()=>{
@@ -290,6 +348,11 @@ $('finishWorkout').onclick=()=>{
   let vol=ex.reduce((a,e)=>a+e.sets.reduce((b,s)=>b+(+s.weight||0)*(+s.reps||0),0),0);
   data.workouts.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex});
   save();cur={routine:cur.routine,started:null,exercises:[],active:false};alert('Workout saved!');nav('dashboard');
+};
+$('cancelWorkoutBtn').onclick=()=>{
+  if(!confirm('Cancel this workout? Nothing will be saved.'))return;
+  cur={routine:cur.routine,started:null,exercises:[],active:false};
+  workout();
 };
 
 setInterval(()=>{if(cur.active&&$('workout').classList.contains('active')){let s=Math.floor((Date.now()-cur.started)/1000);$('workoutClock').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}},1000);

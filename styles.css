@@ -525,6 +525,48 @@ h3{margin:0}
   font-size:20px;
   font-variant-numeric:tabular-nums;
 }
+#workoutEndActions{
+  margin-top:14px;
+}
+.exerciseTitleRow{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.dragHandle{
+  width:20px;
+  height:28px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex:none;
+  cursor:grab;
+  touch-action:none;
+}
+.dragHandle::before{
+  content:'';
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:var(--muted-2);
+  box-shadow:
+    0 -7px 0 var(--muted-2),
+    0 7px 0 var(--muted-2),
+    7px -7px 0 var(--muted-2),
+    7px 0 0 var(--muted-2),
+    7px 7px 0 var(--muted-2);
+}
+.dragHandle:active{
+  cursor:grabbing;
+}
+.exercise.dragging{
+  position:relative;
+  z-index:20;
+  opacity:.92;
+  box-shadow:0 14px 34px -12px rgba(0,0,0,.7);
+  border-color:var(--accent-dim);
+}
 .statGrid{
   display:grid;
   grid-template-columns:1fr 1fr;
