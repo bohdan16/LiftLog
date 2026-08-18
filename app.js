@@ -1,12 +1,12 @@
 const KEY='liftlog-data-v2';
 const EX={
-'Incline Dumbbell Press':['Chest',['Incline Machine Press']],'Overhead Press':['Shoulders',['Machine Shoulder Press']],'Cable Lateral Raise':['Shoulders',['Dumbbell Lateral Raise']],'Chest Fly':['Chest',['Cable Fly','Pec Deck']],'Triceps Pushdown':['Triceps',['Overhead Triceps Extension']],
+'Incline Dumbbell Press':['Chest',['Incline Machine Press']],'Overhead Press':['Shoulders',['Machine Shoulder Press']],'Cable Lateral Raise':['Shoulders',['Dumbbell Lateral Raise']],'Chest Fly':['Chest',['Machine Chest Fly']],'Triceps Pushdown':['Triceps',['Overhead Triceps Extension']],'Dumbbell Bench Press':['Chest',['Barbell Bench Press']],
 'Incline Machine Press':['Chest',['Incline Dumbbell Press']],'Overhead Triceps Extension':['Triceps',['Triceps Pushdown']],
-'Lat Pulldown':['Back',['Assisted Pull-Up']],'Seated Cable Row':['Back',['Chest-Supported Row']],'Rear Delt Fly':['Rear Delts',['Reverse Pec Deck']],'Face Pull':['Rear Delts',['Cable Rear Delt Row']],'Preacher Curl':['Biceps',['Incline Dumbbell Curl']],'Hammer Curl':['Biceps',['Rope Hammer Curl']],
+'Lat Pulldown':['Back',['Assisted Pull-Up']],'Seated Cable Row':['Back',['Chest-Supported Row']],'Rear Delt Fly':['Rear Delts',['Reverse Pec Deck']],'Face Pull':['Rear Delts',['Cable Rear Delt Row']],
 'Standing Cable Pullover':['Back',['Straight-Arm Pulldown']],'Machine Lat Pulldown':['Back',['Lat Pulldown']],'Bent-Over Row':['Back',['Chest-Supported Row']],
-'Squat':['Quads',['Leg Press','Deadlift','Hack Squat']],'Deadlift':['Hamstrings',['Leg Press','Hack Squat']],'Romanian Deadlift':['Hamstrings',['Leg Curl']],'Leg Press':['Quads',['Deadlift','Hack Squat']],'Hack Squat':['Quads',['Leg Press','Deadlift']],'Leg Curl':['Hamstrings',['Romanian Deadlift']],'Leg Extension':['Quads',['Squat','Leg Press']],'Calf Raise':['Calves',['Seated Calf Raise']]
+'Squat':['Quads',['Leg Press','Deadlift','Hack Squat']],'Deadlift':['Hamstrings',['Leg Press','Hack Squat']],'Romanian Deadlift':['Hamstrings',['Leg Curl']],'Leg Press':['Quads',['Deadlift','Hack Squat']],
 };
-const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Lateral Raise','Chest Fly','Triceps Pushdown'],'Push B':['Incline Machine Press','Overhead Press','Cable Lateral Raise','Chest Fly','Overhead Triceps Extension'],'Pull A':['Lat Pulldown','Seated Cable Row','Rear Delt Fly','Face Pull','Preacher Curl','Hammer Curl'],'Pull B':['Standing Cable Pullover','Machine Lat Pulldown','Seated Cable Row','Face Pull','Bent-Over Row','Preacher Curl','Hammer Curl'],'Legs A':['Deadlift','Leg Curl','Leg Extension','Calf Raise'],'Legs B':['Leg Press','Leg Curl','Leg Extension','Calf Raise'],'Legs C':['Hack Squat','Leg Curl','Leg Extension','Calf Raise']};
+const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Lateral Raise','Chest Fly','Triceps Pushdown'],'Push B':['Incline Machine Press','Overhead Press','Cable Lateral Raise','Chest Fly','Overhead Triceps Extension'],'Pull A':['Lat Pulldown','Seated Cable Row','Rear Delt Fly','Face Pull'],'Pull B':['Machine Lat Pulldown','Bent-Over Row','Standing Cable Pullover','Cable Rear Delt Row'],'Legs A':['Squat','Leg Press','Leg Curl'],'Legs B':['Deadlift','Hack Squat','Leg Curl'],'Legs C':['Leg Press','Squat','Romanian Deadlift']};
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||{workouts:[],routines:{...ROUTINES},settings:{rest:90}};
 if(!data.routines['Legs A']&&!data.routines['Legs B']&&!data.routines['Legs C']){
   delete data.routines['Legs'];
@@ -20,13 +20,14 @@ let editingRoutines=false,editingRoutineKey=null;
 const $=id=>document.getElementById(id); const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data)); const dk=d=>new Date(d).toISOString().slice(0,10); const fd=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 
-function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.nav===id));if(id==='dashboard')dashboard();if(id==='workout')workout();if(id==='performance')performance();if(id==='settings')settings();scrollTo(0,0)}
+function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.nav===id))}
 document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));
 function info(n){return EX[n]||['Other',[]]};
 function setsFor(n){let a=[];data.workouts.forEach(w=>(w.exercises||[]).filter(e=>e.name===n).forEach(e=>(e.sets||[]).forEach(s=>{let wt=+s.weight||0,r=+s.reps||0;if(wt&&r)a.push({weight:wt,reps:r,date:w.date})})));return a}
 function best(n){let a=setsFor(n);return{weight:Math.max(0,...a.map(x=>x.weight)),reps:Math.max(0,...a.map(x=>x.reps))}}
 function oneRM(n){return Math.max(0,...setsFor(n).map(x=>x.weight*(1+x.reps/30)))}
-function suggest(n){let a=setsFor(n);if(!a.length)return'First session: choose a comfortable weight';let s=a[a.length-1],w=s.weight;if(s.reps>=12)return`Next: ${Math.round((w+5)/5)*5} lb`;if(s.reps>=10)return`Next: ${Math.round((w+2.5)/2.5)*2.5} lb`;return`Repeat ${Math.round(w/2.5)*2.5} lb and add reps`}
+function epleyRM(wt,reps,range){if(!wt||!reps)return 0;let est=wt*(1+reps/30);return est*range}
+function suggest(n){let a=setsFor(n);if(!a.length)return'First session: choose a comfortable weight';let s=a[a.length-1],w=s.weight;if(s.reps>=12)return`Next: ${Math.round((w+5)/5)*5} lb`;if(s.reps<=6)return`Next: ${Math.round((w+10)/5)*5} lb`;return`Next: ${Math.round((w+2.5)/5)*5} lb`}
 
 function makeSet(b){
   return {weight:b.weight||'',reps:b.reps||'',done:false,restSec:data.settings.rest||90,timerEnd:null,timerDuration:null};
@@ -192,7 +193,7 @@ function workout(){
   });
   $('exerciseList').querySelectorAll('[data-rem]').forEach(b=>b.onclick=()=>{cur.exercises.splice(+b.dataset.rem,1);workout()});
   $('exerciseList').querySelectorAll('[data-sup]').forEach(b=>b.onclick=()=>{let e=cur.exercises[+b.dataset.sup];e.superset=!e.superset;workout()});
-  $('exerciseList').querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{let i=+b.dataset.sub,a=info(cur.exercises[i].name)[1];if(!a.length)return alert('No substitution listed.');let n=prompt('Choose:\n'+a.map((x,j)=>`${j+1}. ${x}`).join('\n'));n=a[(+n||1)-1];if(n){cur.exercises[i].name=n;workout()}});
+  $('exerciseList').querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{let i=+b.dataset.sub,a=info(cur.exercises[i].name)[1];if(!a.length)return alert('No substitution listed.');let n=prompt('Sub with:\n'+a.map((x,j)=>`${j+1}. ${x}`).join('\n'));let idx=(+n||0)-1;if(idx<0||idx>=a.length)return;cur.exercises[i].name=a[idx];workout()});
   $('setsCompleted').textContent=cur.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   initExerciseDrag();
 }
@@ -282,10 +283,10 @@ function renderExercisePicker(initial){
   drawPicker();
 }
 function drawPicker(){
-  let chosenHtml=pickerChosen.map((n,i)=>`<div class="card pickRow" data-idx="${i}" style="padding:8px 10px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="dragHandle"></span><span style="flex:1">${esc(n)}</span><button data-rmpick="${i}" class="textBtn">✕</button></div>`).join('')||`<div class="empty small">No exercises chosen yet.</div>`;
+  let chosenHtml=pickerChosen.map((n,i)=>`<div class="card pickRow" data-idx="${i}" style="padding:8px 10px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="dragHandle"></span><span>${esc(n)}</span><button data-rmpick="${i}" class="textBtn" style="margin-left:auto">✕</button></div>`).join('');
   let groups={};
   Object.keys(EX).sort().forEach(n=>{if(!pickerChosen.includes(n)){let g=info(n)[0];(groups[g]=groups[g]||[]).push(n)}});
-  let addHtml=Object.keys(groups).sort().map(g=>`<div class="pickerGroup"><div class="pickerGroupLabel">${esc(g)}</div>${groups[g].map(n=>`<div class="checkRow" data-addpick="${esc(n)}" style="cursor:pointer">+ ${esc(n)}</div>`).join('')}</div>`).join('');
+  let addHtml=Object.keys(groups).sort().map(g=>`<div class="pickerGroup"><div class="pickerGroupLabel">${esc(g)}</div>${groups[g].map(n=>`<div class="checkRow" data-addpick="${esc(n)}" style="cursor:pointer"><span>+ ${esc(n)}</span></div>`).join('')}</div>`).join('');
   $('exercisePicker').innerHTML=`<div class="pickerGroupLabel">Chosen (drag to reorder)</div><div id="chosenList">${chosenHtml}</div><div class="pickerGroupLabel" style="margin-top:10px">Add exercises</div>${addHtml}`;
   $('exercisePicker').querySelectorAll('[data-addpick]').forEach(el=>el.onclick=()=>{pickerChosen.push(el.dataset.addpick);drawPicker()});
   $('exercisePicker').querySelectorAll('[data-rmpick]').forEach(el=>el.onclick=()=>{pickerChosen.splice(+el.dataset.rmpick,1);drawPicker()});
@@ -396,9 +397,9 @@ $('cancelWorkoutBtn').onclick=()=>{
   workout();
 };
 
-setInterval(()=>{if(cur.active&&$('workout').classList.contains('active')){let s=Math.floor((Date.now()-cur.started)/1000);$('workoutClock').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}},1000);
+setInterval(()=>{if(cur.active&&$('workout').classList.contains('active')){let s=Math.floor((Date.now()-cur.started)/1000);$('workoutClock').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}},100);
 
-function week(){let d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));let e=new Date(d);e.setDate(e.getDate()+7);let w=data.workouts.filter(x=>new Date(x.date)>=d&&new Date(x.date)<e);return{w,vol:w.reduce((a,x)=>a+(+x.volume||0),0)}}
+function week(){let d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));let e=new Date(d);e.setDate(e.getDate()+7);let w=data.workouts.filter(x=>new Date(x.date)>=d&&new Date(x.date)<e);return{d,e,w}}
 function chartSetup(cv){
   let ctx=cv.getContext('2d'),d=window.devicePixelRatio||1;
   let w=cv.clientWidth,h=cv.clientHeight;
@@ -408,9 +409,28 @@ function chartSetup(cv){
   ctx.clearRect(0,0,w,h);
   return {ctx,w,h};
 }
-function line(cv,vals){
+function line(cv,vals,opts={}){
   let s=chartSetup(cv);if(!s)return;let{ctx,w,h}=s;
   let m=Math.max(...vals,1),p=15;
+  
+  if(opts.gridlines){
+    ctx.strokeStyle='#1e2836';
+    ctx.lineWidth=1;
+    for(let i=0;i<=5;i++){
+      let y=h-p-(i/5)*(h-2*p);
+      ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+    }
+  }
+  
+  if(opts.dayLabels){
+    let days=['M','T','W','Th','F','Sa','Su'];
+    ctx.fillStyle='#8995a6';ctx.font='11px sans-serif';
+    vals.forEach((v,i)=>{
+      let x=p+i*(w-2*p)/Math.max(vals.length-1,1);
+      ctx.fillText(days[i]||'',x-4,h-2);
+    });
+  }
+  
   ctx.beginPath();
   vals.forEach((v,i)=>{let x=p+i*(w-2*p)/Math.max(vals.length-1,1),y=h-p-v/m*(h-2*p);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
   ctx.strokeStyle='#aebcff';ctx.lineWidth=3;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
@@ -420,14 +440,41 @@ function bars(cv,obj){
   let a=Object.entries(obj).sort((x,y)=>y[1]-x[1]).slice(0,8),m=Math.max(...a.map(x=>x[1]),1);
   a.forEach(([k,v],i)=>{let y=10+i*25;ctx.fillStyle='#aebcff';ctx.fillRect(115,y,(w-130)*v/m,16);ctx.fillStyle='#9aa6b8';ctx.font='12px sans-serif';ctx.fillText(k,5,y+12)});
 }
-function dashboard(){let t=week(),days=new Set(t.w.map(x=>dk(x.date)));$('weekWorkouts').textContent=`${t.w.length} workout${t.w.length===1?'':'s'}`;$('weekFrequency').textContent=`${days.size} training day${days.size===1?'':'s'}`;$('volumeWeek').textContent=`${Math.round(t.vol).toLocaleString()} lb`;let v=[];for(let i=6;i>=0;i--){let d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-i);v.push(data.workouts.filter(w=>dk(w.date)===dk(d)).reduce((a,x)=>a+(+x.volume||0),0))}line($('volumeChart'),v);let prs=Object.keys(EX).map(n=>[n,best(n).weight]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).slice(0,5);$('prs').innerHTML=prs.map(x=>`<div class="card pr"><span><b>${esc(x[0])}</b><br><span class="muted small">Weight PR</span></span><b>${x[1]} lb</b></div>`).join('')||'<div class="empty">Complete a workout to start tracking PRs.</div>'}
+function dashboard(){let t=week(),days=new Set(t.w.map(x=>dk(x.date)));$('weekWorkouts').textContent=`${t.w.length} workout${t.w.length===1?'':'s'}`;$('weekFrequency').textContent=`${days.size} times`;let vol=[0,0,0,0,0,0,0];t.w.forEach(w=>{let d=new Date(w.date);let day=(d.getDay()+6)%7;vol[day]+=(w.volume||0)});line($('weekChart'),vol,{gridlines:true,dayLabels:true});dashboard.lastVol=vol}
 function performance(){
   let names=Object.keys(EX).sort();$('progressExercise').innerHTML=names.map(n=>`<option>${esc(n)}</option>`).join('');updateProgress($('progressExercise').value);
   history();
+  trainingFreq();
 }
 $('progressExercise').onchange=e=>updateProgress(e.target.value);
 $('historyToggle').onclick=()=>{$('historyList').classList.toggle('hidden')};
-function updateProgress(n){let a=setsFor(n),b=best(n),rm=oneRM(n),vol=a.reduce((x,s)=>x+s.weight*s.reps,0);$('bestWeight').textContent=`${b.weight} lb`;$('bestReps').textContent=b.reps;$('best1rm').textContent=`${Math.round(rm)} lb`;$('exerciseVolume').textContent=`${Math.round(vol).toLocaleString()} lb`;let trend={};a.forEach(s=>trend[dk(s.date)]=Math.max(trend[dk(s.date)]||0,s.weight*(1+s.reps/30)));line($('strengthChart'),Object.values(trend).slice(-14));let mus={};data.workouts.forEach(w=>(w.exercises||[]).forEach(e=>{let m=info(e.name)[0];mus[m]=(mus[m]||0)+e.sets.reduce((q,s)=>q+(+s.weight||0)*(+s.reps||0),0)}));bars($('muscleChart'),mus);let f=[];for(let i=7;i>=0;i--){let end=new Date();end.setHours(0,0,0,0);end.setDate(end.getDate()-i*7);let start=new Date(end);start.setDate(start.getDate()-7);f.push(data.workouts.filter(w=>new Date(w.date)>=start&&new Date(w.date)<end).length)}line($('frequencyChart'),f);$('progressDetails').innerHTML=`<div class="card"><b>Progression recommendation</b><p class="muted small">${esc(suggest(n))}. Rep PRs and weight PRs are tracked independently. Estimated 1RM uses the Epley formula.</p></div>`}
+function updateProgress(n){
+  let a=setsFor(n),b=best(n),rm=oneRM(n);
+  let prSet={weight:0,reps:0};
+  a.forEach(s=>{if(s.weight*s.reps>prSet.weight*prSet.reps){prSet=s}});
+  let weekStart=new Date();weekStart.setDate(weekStart.getDate()-7);
+  let weekVol=a.filter(s=>new Date(s.date)>=weekStart).reduce((x,s)=>x+s.weight*s.reps,0);
+  let monthStart=new Date();monthStart.setMonth(monthStart.getMonth()-1);
+  let monthVol=a.filter(s=>new Date(s.date)>=monthStart).reduce((x,s)=>x+s.weight*s.reps,0);
+  let est68=epleyRM(b.weight,Math.min(b.reps,8),0.9);
+  
+  $('prVolume').textContent=`${prSet.weight*prSet.reps||0} lb`;
+  $('prWeightReps').textContent=`${prSet.weight||0} lb × ${prSet.reps||0}`;
+  $('weeklyVolume').textContent=`${Math.round(weekVol).toLocaleString()} lb`;
+  $('monthlyVolume').textContent=`${Math.round(monthVol).toLocaleString()} lb`;
+  $('best1rm').textContent=`${Math.round(rm)} lb`;
+  $('est68rm').textContent=`${Math.round(est68)} lb`;
+}
+
+function trainingFreq(){
+  let last30=new Date();last30.setDate(last30.getDate()-30);
+  let freq={};
+  data.workouts.filter(w=>new Date(w.date)>=last30).forEach(w=>{
+    let d=new Date(w.date).toLocaleDateString(undefined,{weekday:'short'});
+    freq[d]=(freq[d]||0)+1;
+  });
+  bars($('trainingFreqChart'),freq);
+}
 
 function history(){
   let all=data.workouts.map(x=>({...x,type:'Workout'})).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -467,7 +514,7 @@ function settings(){
   $('defaultRest').value=data.settings.rest;
   $('routineSettings').innerHTML=Object.entries(data.routines).map(([r,e])=>{
     let builtIn=Object.prototype.hasOwnProperty.call(ROUTINES,r);
-    return `<div class="routineRow" style="padding:12px 0;border-bottom:1px solid #252e3b"><span><b>${esc(r)}</b><br><span class="muted small">${e.length} exercises${builtIn?' • Built in':''}</span></span><button class="textBtn" data-delroutine="${esc(r)}">Delete</button></div>`;
+    return `<div class="routineRow" style="padding:12px 0;border-bottom:1px solid #252e3b"><span><b>${esc(r)}</b><br><span class="muted small">${e.length} exercises${builtIn?' • Built in':''}</span></span><button data-delroutine="${esc(r)}" class="textBtn danger" style="color:var(--danger-text)">Delete</button></div>`;
   }).join('');
   $('routineSettings').querySelectorAll('[data-delroutine]').forEach(b=>b.onclick=()=>{
     let r=b.dataset.delroutine;
@@ -478,13 +525,13 @@ function settings(){
     save();settings();
   });
 }
-$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Default rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`liftlog-backup-${dk(new Date())}.json`;a.click()};$('importData').onchange=e=>{let f=e.target.files[0],r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.workouts)throw 0;data=x;data.settings=data.settings||{rest:90};save();location.reload()}catch{alert('Invalid LiftLog backup.')}};r.readAsText(f)};$('clearData').onclick=()=>{if(confirm('Delete ALL LiftLog data?')){localStorage.removeItem(KEY);location.reload()}};
+$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Default rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href='data:text/json,'+encodeURIComponent(JSON.stringify(data,null,2));a.download='liftlog-backup.json';a.click()};
 let resizeT=null;
 window.addEventListener('resize',()=>{
   clearTimeout(resizeT);
   resizeT=setTimeout(()=>{
     if($('dashboard').classList.contains('active'))dashboard();
-    if($('performance').classList.contains('active'))updateProgress($('progressExercise').value);
+    if($('performance').classList.contains('active')){updateProgress($('progressExercise').value);trainingFreq()}
   },150);
-});window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('installBtn').classList.remove('hidden')});$('installBtn').onclick=async()=>{if(installEvt){installEvt.prompt();await installEvt.userChoice;installEvt=null}};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');
+});window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('installBtn').classList.remove('hidden')});$('installBtn').onclick=async()=>{if(installEvt){installEvt.prompt();installEvt.userChoice.then(r=>{if(r.outcome==='accepted'){installEvt=null;$('installBtn').classList.add('hidden')}})}};
 dashboard();workout();performance();settings();
