@@ -41,17 +41,17 @@ function startSetTimer(eIdx, sIdx){
   let set = cur.exercises[eIdx].sets[sIdx];
   let timerKey = `${eIdx}-${sIdx}`;
   if(activeTimers[timerKey]) clearInterval(activeTimers[timerKey]);
-  
+
   let duration = Math.max(5, +set.restSec || 90);
   set.timerDuration = duration;
   set.timerEnd = Date.now() + duration * 1000;
-  
+
   activeTimers[timerKey] = setInterval(()=>{
     let el = $(`timer-${eIdx}-${sIdx}`);
     let barEl = $(`timerBar-${eIdx}-${sIdx}`);
     let left = Math.max(0, set.timerEnd - Date.now());
     let pct = (left / (set.timerDuration * 1000)) * 100;
-    
+
     if(el){
       el.textContent = new Date(left).toISOString().slice(14,19);
       el.classList.add('running');
@@ -59,7 +59,7 @@ function startSetTimer(eIdx, sIdx){
     if(barEl){
       barEl.style.width = `${pct}%`;
     }
-    
+
     if(left <= 0){
       clearInterval(activeTimers[timerKey]);
       delete activeTimers[timerKey];
@@ -123,7 +123,7 @@ function workout(){
   }
 
   $('routineSummary').textContent=`${cur.exercises.length} exercises • Visual rest countdown bars + progression suggestions`;
-  
+
   $('exerciseList').innerHTML=cur.exercises.map((e,i)=>{
     let b=best(e.name),inf=info(e.name);
     return `<div class="card exercise" data-idx="${i}">
@@ -132,7 +132,7 @@ function workout(){
       <div class="sets">${e.sets.map((x,j)=>{
         let timeStr = x.timerEnd ? new Date(Math.max(0, x.timerEnd - Date.now())).toISOString().slice(14,19) : new Date((+x.restSec||90)*1000).toISOString().slice(14,19);
         let barPct = (x.timerEnd && x.timerDuration) ? Math.max(0, ((x.timerEnd - Date.now()) / (x.timerDuration * 1000)) * 100) : 0;
-        
+
         return `<div class="setBlock ${x.done?'done':''}">
           <div class="setRow">
             <span class="setNum">${j+1}</span>
@@ -390,6 +390,7 @@ $('finishWorkout').onclick=()=>{
   let vol=ex.reduce((a,e)=>a+e.sets.reduce((b,s)=>b+(+s.weight||0)*(+s.reps||0),0),0);
   data.workouts.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex});
   save();cur={routine:cur.routine,started:null,exercises:[],active:false};alert('Workout saved!');nav('dashboard');
+  dashboard();performance();
 };
 $('cancelWorkoutBtn').onclick=()=>{
   if(!confirm('Cancel this workout? Nothing will be saved.'))return;
@@ -399,8 +400,11 @@ $('cancelWorkoutBtn').onclick=()=>{
 
 setInterval(()=>{if(cur.active&&$('workout').classList.contains('active')){let s=Math.floor((Date.now()-cur.started)/1000);$('workoutClock').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}},100);
 
+/* ---------- charts ---------- */
 function week(){let d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));let e=new Date(d);e.setDate(e.getDate()+7);let w=data.workouts.filter(x=>new Date(x.date)>=d&&new Date(x.date)<e);return{d,e,w}}
+
 function chartSetup(cv){
+  if(!cv)return null;
   let ctx=cv.getContext('2d'),d=window.devicePixelRatio||1;
   let w=cv.clientWidth,h=cv.clientHeight;
   if(!w||!h)return null;
@@ -409,76 +413,145 @@ function chartSetup(cv){
   ctx.clearRect(0,0,w,h);
   return {ctx,w,h};
 }
-function line(cv,vals,opts={}){
-  let s=chartSetup(cv);if(!s)return;let{ctx,w,h}=s;
-  let m=Math.max(...vals,1),p=15;
-  
-  if(opts.gridlines){
-    ctx.strokeStyle='#1e2836';
-    ctx.lineWidth=1;
-    for(let i=0;i<=5;i++){
-      let y=h-p-(i/5)*(h-2*p);
-      ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
-    }
-  }
-  
-  if(opts.dayLabels){
-    let days=['M','T','W','Th','F','Sa','Su'];
-    ctx.fillStyle='#8995a6';ctx.font='11px sans-serif';
-    vals.forEach((v,i)=>{
-      let x=p+i*(w-2*p)/Math.max(vals.length-1,1);
-      ctx.fillText(days[i]||'',x-4,h-2);
-    });
-  }
-  
-  ctx.beginPath();
-  vals.forEach((v,i)=>{let x=p+i*(w-2*p)/Math.max(vals.length-1,1),y=h-p-v/m*(h-2*p);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
-  ctx.strokeStyle='#aebcff';ctx.lineWidth=3;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
-}
-function bars(cv,obj){
-  let s=chartSetup(cv);if(!s)return;let{ctx,w}=s;
-  let a=Object.entries(obj).sort((x,y)=>y[1]-x[1]).slice(0,8),m=Math.max(...a.map(x=>x[1]),1);
-  a.forEach(([k,v],i)=>{let y=10+i*25;ctx.fillStyle='#aebcff';ctx.fillRect(115,y,(w-130)*v/m,16);ctx.fillStyle='#9aa6b8';ctx.font='12px sans-serif';ctx.fillText(k,5,y+12)});
-}
-function dashboard(){let t=week(),days=new Set(t.w.map(x=>dk(x.date)));$('weekWorkouts').textContent=`${t.w.length} workout${t.w.length===1?'':'s'}`;$('weekFrequency').textContent=`${days.size} times`;let vol=[0,0,0,0,0,0,0];t.w.forEach(w=>{let d=new Date(w.date);let day=(d.getDay()+6)%7;vol[day]+=(w.volume||0)});line($('weekChart'),vol,{gridlines:true,dayLabels:true});dashboard.lastVol=vol}
-function performance(){
-  let names=Object.keys(EX).sort();$('progressExercise').innerHTML=names.map(n=>`<option>${esc(n)}</option>`).join('');updateProgress($('progressExercise').value);
-  history();
-  trainingFreq();
-}
-$('progressExercise').onchange=e=>updateProgress(e.target.value);
-$('historyToggle').onclick=()=>{$('historyList').classList.toggle('hidden')};
-function updateProgress(n){
-  let a=setsFor(n),b=best(n),rm=oneRM(n);
-  let prSet={weight:0,reps:0};
-  a.forEach(s=>{if(s.weight*s.reps>prSet.weight*prSet.reps){prSet=s}});
-  let weekStart=new Date();weekStart.setDate(weekStart.getDate()-7);
-  let weekVol=a.filter(s=>new Date(s.date)>=weekStart).reduce((x,s)=>x+s.weight*s.reps,0);
-  let monthStart=new Date();monthStart.setMonth(monthStart.getMonth()-1);
-  let monthVol=a.filter(s=>new Date(s.date)>=monthStart).reduce((x,s)=>x+s.weight*s.reps,0);
-  let est68=epleyRM(b.weight,Math.min(b.reps,8),0.9);
-  
-  $('prVolume').textContent=`${prSet.weight*prSet.reps||0} lb`;
-  $('prWeightReps').textContent=`${prSet.weight||0} lb × ${prSet.reps||0}`;
-  $('weeklyVolume').textContent=`${Math.round(weekVol).toLocaleString()} lb`;
-  $('monthlyVolume').textContent=`${Math.round(monthVol).toLocaleString()} lb`;
-  $('best1rm').textContent=`${Math.round(rm)} lb`;
-  $('est68rm').textContent=`${Math.round(est68)} lb`;
+
+function emptyChart(ctx,w,h,msg){
+  ctx.fillStyle='#6f7b8d';ctx.font='12px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.textAlign='center';
+  ctx.fillText(msg||'No data yet',w/2,h/2);
 }
 
-function trainingFreq(){
-  let last30=new Date();last30.setDate(last30.getDate()-30);
-  let freq={};
-  data.workouts.filter(w=>new Date(w.date)>=last30).forEach(w=>{
-    let d=new Date(w.date).toLocaleDateString(undefined,{weekday:'short'});
-    freq[d]=(freq[d]||0)+1;
+function detailedLine(cv,vals,labels,step,unit){
+  let s=chartSetup(cv);if(!s)return;
+  let{ctx,w,h}=s;
+  if(!vals||!vals.length||vals.every(v=>!v)){emptyChart(ctx,w,h);return}
+  let left=48,right=8,top=10,bottom=20;
+  let plotW=Math.max(10,w-left-right),plotH=Math.max(10,h-top-bottom);
+  let maxVal=Math.max(...vals,0);
+  let niceMax=Math.max(step,Math.ceil(maxVal/step)*step);
+  let count=Math.max(1,Math.min(5,Math.round(niceMax/step)));
+  ctx.font='10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+  ctx.lineWidth=1;
+  for(let i=0;i<=count;i++){
+    let v=(niceMax/count)*i,y=top+plotH-(v/niceMax)*plotH;
+    ctx.strokeStyle='rgba(140,153,170,.14)';
+    ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
+    ctx.fillStyle='#8995a6';ctx.textAlign='right';
+    ctx.fillText(Math.round(v).toLocaleString()+(unit?' '+unit:''),left-6,y+3);
+  }
+  vals.forEach((v,i)=>{
+    let x=left+(plotW*i)/Math.max(1,vals.length-1);
+    ctx.fillStyle='#8995a6';ctx.textAlign='center';
+    ctx.fillText(labels[i]||'',x,h-6);
   });
-  bars($('trainingFreqChart'),freq);
+  ctx.beginPath();
+  vals.forEach((v,i)=>{
+    let x=left+(plotW*i)/Math.max(1,vals.length-1),y=top+plotH-(v/niceMax)*plotH;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  });
+  ctx.strokeStyle='#aebcff';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+  vals.forEach((v,i)=>{
+    let x=left+(plotW*i)/Math.max(1,vals.length-1),y=top+plotH-(v/niceMax)*plotH;
+    ctx.fillStyle='#aebcff';ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();
+  });
+}
+
+function bars(cv,obj,unit){
+  let s=chartSetup(cv);if(!s)return;
+  let{ctx,w,h}=s;
+  let entries=Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  if(!entries.length){emptyChart(ctx,w,h);return}
+  let max=Math.max(...entries.map(x=>x[1]),1);
+  let rowH=Math.min(26,(h-8)/entries.length);
+  let labelW=100;
+  ctx.font='11px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+  entries.forEach(([k,v],i)=>{
+    let y=6+i*rowH;
+    ctx.fillStyle='#9aa6b8';ctx.textAlign='left';
+    ctx.fillText(k.length>13?k.slice(0,12)+'…':k,4,y+rowH*0.62);
+    let barMax=Math.max(10,w-labelW-56);
+    let barW=Math.max(2,(barMax*v)/max);
+    ctx.fillStyle='#aebcff';
+    ctx.fillRect(labelW,y+3,barW,Math.max(4,rowH-10));
+    ctx.fillStyle='#eef1ff';
+    ctx.fillText(Math.round(v).toLocaleString()+(unit?' '+unit:''),labelW+barW+6,y+rowH*0.62);
+  });
+}
+
+/* ---------- dashboard ---------- */
+function dashboard(){
+  let t=week(),days=new Set(t.w.map(x=>dk(x.date)));
+  $('weekWorkouts').textContent=`${t.w.length} workout${t.w.length===1?'':'s'}`;
+  $('weekFrequency').textContent=`${days.size} training day${days.size===1?'':'s'}`;
+  let weekVol=t.w.reduce((a,x)=>a+(+x.volume||0),0);
+  $('volumeWeek').textContent=`${Math.round(weekVol).toLocaleString()} lb`;
+
+  let ws=new Date(),day=(ws.getDay()+6)%7;
+  ws.setHours(0,0,0,0);ws.setDate(ws.getDate()-day);
+  let vals=[],labels=[];
+  for(let i=0;i<7;i++){
+    let d=new Date(ws);d.setDate(ws.getDate()+i);
+    vals.push(data.workouts.filter(w=>dk(w.date)===dk(d)).reduce((a,x)=>a+(+x.volume||0),0));
+    labels.push(d.toLocaleDateString(undefined,{weekday:'short'}));
+  }
+  detailedLine($('volumeChart'),vals,labels,5000,'lb');
+
+  let prs=Object.keys(EX).map(n=>[n,best(n).weight]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  $('prs').innerHTML=prs.map(x=>`<div class="card pr"><span><b>${esc(x[0])}</b><br><span class="muted small">Weight PR</span></span><b>${x[1]} lb</b></div>`).join('')||'<div class="empty">Complete a workout to start tracking PRs.</div>';
+}
+
+/* ---------- performance ---------- */
+function performance(){
+  let names=Object.keys(EX).sort();
+  $('progressExercise').innerHTML=names.map(n=>`<option>${esc(n)}</option>`).join('');
+  updateProgress($('progressExercise').value);
+  history();
+  renderMuscleChart();
+  renderFrequencyChart();
+}
+$('progressExercise').onchange=e=>updateProgress(e.target.value);
+$('historyToggle').onclick=()=>{
+  let hidden=$('historyList').classList.toggle('hidden');
+  $('historyToggle').textContent=hidden?'History':'Hide history';
+};
+
+function updateProgress(n){
+  let a=setsFor(n),b=best(n),rm=oneRM(n);
+  let volTotal=a.reduce((x,s)=>x+s.weight*s.reps,0);
+  $('bestWeight').textContent=`${b.weight||0} lb`;
+  $('bestReps').textContent=`${b.reps||0}`;
+  $('best1rm').textContent=`${Math.round(rm)} lb`;
+  $('exerciseVolume').textContent=`${Math.round(volTotal).toLocaleString()} lb`;
+
+  let trend={};
+  a.forEach(s=>{let k=dk(s.date),est=s.weight*(1+s.reps/30);trend[k]=Math.max(trend[k]||0,est)});
+  let keys=Object.keys(trend).sort().slice(-14);
+  detailedLine($('strengthChart'),keys.map(k=>trend[k]),keys.map(k=>k.slice(5)),5,'lb');
+
+  $('progressDetails').innerHTML=`<div class="card"><b>Progression recommendation</b><p class="muted small">${esc(suggest(n))}. Estimated 1RM uses the Epley formula.</p></div>`;
+}
+
+function renderMuscleChart(){
+  let mus={};
+  data.workouts.forEach(w=>(w.exercises||[]).forEach(e=>{
+    let m=info(e.name)[0];
+    mus[m]=(mus[m]||0)+(e.sets||[]).reduce((q,s)=>q+(+s.weight||0)*(+s.reps||0),0);
+  }));
+  bars($('muscleChart'),mus,'lb');
+}
+
+function renderFrequencyChart(){
+  let vals=[],labels=[];
+  for(let i=7;i>=0;i--){
+    let end=new Date();end.setHours(0,0,0,0);end.setDate(end.getDate()-i*7);
+    let start=new Date(end);start.setDate(start.getDate()-7);
+    vals.push(data.workouts.filter(w=>new Date(w.date)>=start&&new Date(w.date)<end).length);
+    labels.push(i===0?'This wk':i+'w ago');
+  }
+  detailedLine($('frequencyChart'),vals,labels,1,'wk');
 }
 
 function history(){
   let all=data.workouts.map(x=>({...x,type:'Workout'})).sort((a,b)=>new Date(b.date)-new Date(a.date));
-  
+
   $('historyList').innerHTML=all.map((x, idx)=>{
     let exList = (x.exercises||[]).map(e=>`
       <div class="historyExercise">
@@ -488,7 +561,7 @@ function history(){
         </div>
       </div>
     `).join('');
-    
+
     return `<div class="card historyCard">
       <div class="historyHeader" data-htoggle="${idx}">
         <div>
@@ -510,6 +583,8 @@ function history(){
 }
 
 $('clearHistory').onclick=()=>{if(confirm('Clear workout history?')){data.workouts=[];save();history();dashboard();performance()}};
+
+/* ---------- settings ---------- */
 function settings(){
   $('defaultRest').value=data.settings.rest;
   $('routineSettings').innerHTML=Object.entries(data.routines).map(([r,e])=>{
@@ -525,13 +600,61 @@ function settings(){
     save();settings();
   });
 }
-$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Default rest timer saved.')};$('exportData').onclick=()=>{let a=document.createElement('a');a.href='data:text/json,'+encodeURIComponent(JSON.stringify(data,null,2));a.download='liftlog-backup.json';a.click()};
+$('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Default rest timer saved.')};
+
+$('exportData').onclick=()=>{
+  let a=document.createElement('a');
+  a.href='data:text/json,'+encodeURIComponent(JSON.stringify(data,null,2));
+  a.download='liftlog-backup.json';
+  a.click();
+};
+
+$('importData').onchange=e=>{
+  let file=e.target.files[0];
+  if(!file)return;
+  let reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      let imported=JSON.parse(reader.result);
+      if(!imported||typeof imported!=='object')throw new Error('bad format');
+      if(!confirm('Import this backup? It will replace your current workouts, routines, and settings.')){e.target.value='';return}
+      data={
+        workouts:Array.isArray(imported.workouts)?imported.workouts:[],
+        routines:(imported.routines&&typeof imported.routines==='object'&&Object.keys(imported.routines).length)?imported.routines:{...ROUTINES},
+        settings:(imported.settings&&typeof imported.settings==='object')?imported.settings:{rest:90}
+      };
+      if(!data.routines[cur.routine])cur.routine=Object.keys(data.routines)[0]||'Push A';
+      save();
+      dashboard();workout();performance();settings();
+      alert('Data imported successfully.');
+    }catch(err){
+      alert('Could not import this file. Make sure it is a valid LiftLog backup JSON.');
+    }
+    e.target.value='';
+  };
+  reader.readAsText(file);
+};
+
+$('clearData').onclick=()=>{
+  if(!confirm('Delete ALL local data? This cannot be undone.'))return;
+  if(!confirm('Are you absolutely sure? This will erase your workouts, routines, and settings.'))return;
+  localStorage.removeItem(KEY);
+  data={workouts:[],routines:{...ROUTINES},settings:{rest:90}};
+  cur={routine:Object.keys(data.routines)[0]||'Push A',started:null,exercises:[],active:false};
+  save();
+  dashboard();workout();performance();settings();
+  alert('All data deleted.');
+};
+
 let resizeT=null;
 window.addEventListener('resize',()=>{
   clearTimeout(resizeT);
   resizeT=setTimeout(()=>{
     if($('dashboard').classList.contains('active'))dashboard();
-    if($('performance').classList.contains('active')){updateProgress($('progressExercise').value);trainingFreq()}
+    if($('performance').classList.contains('active')){updateProgress($('progressExercise').value);renderMuscleChart();renderFrequencyChart()}
   },150);
-});window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('installBtn').classList.remove('hidden')});$('installBtn').onclick=async()=>{if(installEvt){installEvt.prompt();installEvt.userChoice.then(r=>{if(r.outcome==='accepted'){installEvt=null;$('installBtn').classList.add('hidden')}})}};
+});
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;$('installBtn').classList.remove('hidden')});
+$('installBtn').onclick=async()=>{if(installEvt){installEvt.prompt();installEvt.userChoice.then(r=>{if(r.outcome==='accepted'){installEvt=null;$('installBtn').classList.add('hidden')}})}};
+
 dashboard();workout();performance();settings();
