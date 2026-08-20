@@ -172,6 +172,21 @@ h3{margin:0}
   color:var(--accent);
 }
 
+.modalOverlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.6);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:50;
+  padding:20px;
+}
+.modalOverlay.hidden{display:none!important}
+.modalCard{max-width:360px;width:100%}
+.modalTitle{font-weight:700;margin-bottom:6px}
+.modalBody{white-space:pre-line;margin-bottom:14px}
+
 .checkRow{
   display:flex;
   align-items:center;
