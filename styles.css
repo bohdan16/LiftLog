@@ -153,6 +153,25 @@ h3{margin:0}
   text-transform:uppercase;
   margin:10px 0 4px;
 }
+.exBubbles{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.exBubble{
+  border:1px solid var(--input-border);
+  background:var(--input);
+  color:#fff;
+  border-radius:999px;
+  padding:8px 13px;
+  font-size:13px;
+}
+.exBubble:active{
+  border-color:var(--accent);
+  background:var(--accent-wash);
+  color:var(--accent);
+}
+
 .checkRow{
   display:flex;
   align-items:center;

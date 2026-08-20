@@ -96,7 +96,7 @@ function workout(){
   $('newWorkout').classList.toggle('hidden',!cur.active);
   $('routineGrid').classList.toggle('hidden',cur.active);
   $('routineActions').classList.toggle('hidden',cur.active);
-  if(cur.active){$('addRoutineForm').classList.add('hidden');editingRoutines=false}
+  if(cur.active){$('addRoutineForm').classList.add('hidden');editingRoutines=false}else{$('addExerciseForm').classList.add('hidden')}
   $('editRoutinesBtn').textContent=editingRoutines?'Done editing':'Edit routines';
   $('routinePreview').classList.toggle('hidden',cur.active||editingRoutines);
   $('startWorkoutBtn').classList.toggle('hidden',cur.active);
@@ -263,19 +263,35 @@ $('startWorkoutBtn').onclick=()=>{
 };
 
 $('newWorkout').onclick=()=>{
-  let existing=cur.exercises.map(e=>e.name);
-  let options=Object.keys(EX).filter(n=>!existing.includes(n)).sort();
-  if(!options.length)return alert('All exercises already added.');
-  let choice=prompt('Add exercise:\n'+options.map((n,i)=>`${i+1}. ${n}`).join('\n'));
-  let idx=(+choice||0)-1;
-  if(idx<0||idx>=options.length)return;
-  cur.exercises.push(make(options[idx]));
-  workout();
-  if(confirm('Save this as the routine template too?')){
-    data.routines[cur.routine]=cur.exercises.map(e=>e.name);
-    save();
-  }
+  $('addExerciseForm').classList.remove('hidden');
+  $('addExerciseSearch').value='';
+  renderAddExercisePicker('');
+  $('addExerciseSearch').focus();
 };
+$('addExerciseSearch').oninput=e=>renderAddExercisePicker(e.target.value);
+$('cancelAddExercise').onclick=()=>$('addExerciseForm').classList.add('hidden');
+
+function renderAddExercisePicker(filter){
+  let existing=cur.exercises.map(e=>e.name);
+  let q=(filter||'').trim().toLowerCase();
+  let groups={};
+  Object.keys(EX).sort().forEach(n=>{
+    if(existing.includes(n))return;
+    if(q&&!n.toLowerCase().includes(q))return;
+    let g=info(n)[0];(groups[g]=groups[g]||[]).push(n);
+  });
+  let html=Object.keys(groups).sort().map(g=>`<div class="pickerGroup"><div class="pickerGroupLabel">${esc(g)}</div><div class="exBubbles">${groups[g].map(n=>`<button class="exBubble" data-pickex="${esc(n)}">${esc(n)}</button>`).join('')}</div></div>`).join('');
+  $('addExercisePicker').innerHTML=html||'<div class="empty">No matches.</div>';
+  $('addExercisePicker').querySelectorAll('[data-pickex]').forEach(b=>b.onclick=()=>{
+    cur.exercises.push(make(b.dataset.pickex));
+    $('addExerciseForm').classList.add('hidden');
+    workout();
+    if(confirm('Save this as the routine template too?')){
+      data.routines[cur.routine]=cur.exercises.map(e=>e.name);
+      save();
+    }
+  });
+}
 
 let pickerChosen=[];
 function renderExercisePicker(initial){
