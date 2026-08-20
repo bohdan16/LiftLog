@@ -344,26 +344,48 @@ h3{margin:0}
   gap:10px;
 }
 .exercise{
-  padding:14px;
+  padding:0 14px 14px;
   transition:padding .15s var(--ease);
+  overflow:hidden;
 }
 #exerciseList.reordering .exercise{
-  padding:9px 14px;
+  padding-bottom:0;
 }
 #exerciseList.reordering .exercise .exerciseMeta,
 #exerciseList.reordering .exercise .sets,
 #exerciseList.reordering .exercise .exerciseTools,
-#exerciseList.reordering .exercise .addSet{
+#exerciseList.reordering .exercise .addSet,
+#exerciseList.reordering .exercise .exerciseSub{
   display:none;
 }
-#exerciseList.reordering .exercise .exerciseHead{
-  margin-bottom:0;
-}
-.exerciseHead{
+.exerciseDragBar{
+  margin:0 -14px 10px;
+  padding:14px 14px;
+  min-height:44px;
   display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:8px;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  font-weight:750;
+  font-size:15px;
+  color:#fff;
+  background:rgba(174,188,255,.06);
+  border-bottom:1px solid var(--card-border);
+  cursor:grab;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+  -moz-user-select:none;
+  -ms-user-select:none;
+  -webkit-touch-callout:none;
+}
+.exerciseDragBar:active{
+  cursor:grabbing;
+  background:var(--accent-wash);
+}
+.exerciseSub{
+  display:flex;
+  justify-content:flex-end;
   margin-bottom:7px;
 }
 .exerciseMeta{

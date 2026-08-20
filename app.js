@@ -94,10 +94,15 @@ function stopSetTimer(eIdx, sIdx){
   if(barEl) barEl.style.width = '0%';
 }
 
+function currentExerciseName(){
+  let e=cur.exercises.find(e=>e.sets.some(s=>!s.done));
+  return e?e.name:(cur.exercises.length?cur.exercises[cur.exercises.length-1].name:'Workout');
+}
+
 function workout(){
   if(!data.routines[cur.routine])cur.routine=Object.keys(data.routines)[0];
 
-  $('workoutTitle').textContent=cur.active?'Workout':'Workouts';
+  $('workoutTitle').textContent=cur.active?currentExerciseName():'Workouts';
   $('newWorkout').classList.toggle('hidden',!cur.active);
   $('addRoutineBtn').classList.toggle('hidden',cur.active);
   $('editRoutinesBtn').classList.toggle('hidden',cur.active);
@@ -129,7 +134,8 @@ function workout(){
   $('exerciseList').innerHTML=cur.exercises.map((e,i)=>{
     let b=best(e.name),inf=info(e.name);
     return `<div class="card exercise" data-idx="${i}">
-      <div class="exerciseHead"><div class="exerciseTitleRow"><span class="dragHandle"></span><b>${esc(e.name)}${e.superset?' • SUPERSET':''}</b></div><span class="pill">${esc(inf[0])}</span></div>
+      <div class="exerciseDragBar" data-drag>${esc(e.name)}${e.superset?' • SUPERSET':''}</div>
+      <div class="exerciseSub"><span class="pill">${esc(inf[0])}</span></div>
       <div class="exerciseMeta"><span>Best ${b.weight||0} lb × ${b.reps||0}</span><span>${esc(suggest(e.name))}</span></div>
       <div class="sets">${e.sets.map((x,j)=>{
         let timeStr = x.timerEnd ? new Date(Math.max(0, x.timerEnd - Date.now())).toISOString().slice(14,19) : new Date((+x.restSec||90)*1000).toISOString().slice(14,19);
@@ -202,7 +208,7 @@ function workout(){
 
 function initExerciseDrag(){
   let list=$('exerciseList');
-  list.querySelectorAll('.dragHandle').forEach(handle=>{
+  list.querySelectorAll('[data-drag]').forEach(handle=>{
     handle.onpointerdown=e=>{
       e.preventDefault();
       let card=handle.closest('.exercise');
