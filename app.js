@@ -6,15 +6,10 @@ const EX={
 'Standing Cable Pullover':['Back',['Straight-Arm Pulldown']],'Machine Lat Pulldown':['Back',['Lat Pulldown']],'Bent-Over Row':['Back',['Chest-Supported Row']],
 'Squat':['Quads',['Leg Press','Deadlift','Hack Squat']],'Deadlift':['Hamstrings',['Leg Press','Hack Squat']],'Romanian Deadlift':['Hamstrings',['Leg Curl']],'Leg Press':['Quads',['Deadlift','Hack Squat']],
 };
-const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Lateral Raise','Chest Fly','Triceps Pushdown'],'Push B':['Incline Machine Press','Overhead Press','Cable Lateral Raise','Chest Fly','Overhead Triceps Extension'],'Pull A':['Lat Pulldown','Seated Cable Row','Rear Delt Fly','Face Pull'],'Pull B':['Machine Lat Pulldown','Bent-Over Row','Standing Cable Pullover','Cable Rear Delt Row'],'Legs A':['Squat','Leg Press','Leg Curl'],'Legs B':['Deadlift','Hack Squat','Leg Curl'],'Legs C':['Leg Press','Squat','Romanian Deadlift']};
+const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Lateral Raise','Chest Fly','Triceps Pushdown'],'Push B':['Incline Machine Press','Overhead Press','Cable Lateral Raise','Chest Fly','Overhead Triceps Extension'],'Pull A':['Lat Pulldown','Seated Cable Row','Rear Delt Fly','Face Pull'],'Pull B':['Machine Lat Pulldown','Bent-Over Row','Standing Cable Pullover','Cable Rear Delt Row']};
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||{workouts:[],routines:{...ROUTINES},settings:{rest:90}};
-if(!data.routines['Legs A']&&!data.routines['Legs B']&&!data.routines['Legs C']){
-  delete data.routines['Legs'];
-  data.routines['Legs A']=ROUTINES['Legs A'];
-  data.routines['Legs B']=ROUTINES['Legs B'];
-  data.routines['Legs C']=ROUTINES['Legs C'];
-  localStorage.setItem(KEY,JSON.stringify(data));
-}
+delete data.routines['Legs A'];delete data.routines['Legs B'];delete data.routines['Legs C'];delete data.routines['Legs'];
+localStorage.setItem(KEY,JSON.stringify(data));
 let cur={routine:Object.keys(data.routines)[0]||'Push A',started:null,exercises:[],active:false},activeTimers={},installEvt=null;
 let editingRoutines=false,editingRoutineKey=null;
 const $=id=>document.getElementById(id); const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -305,7 +300,7 @@ function renderExercisePicker(initial){
   drawPicker();
 }
 function drawPicker(){
-  let chosenHtml=pickerChosen.map((item,i)=>`<div class="card pickRow" data-idx="${i}" style="padding:8px 10px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="dragHandle"></span><span style="flex:1">${esc(item.name)}</span><input type="number" min="1" max="10" value="${item.sets}" class="restInput" data-setsfor="${i}" style="width:44px"><span class="muted small">sets</span><button data-rmpick="${i}" class="textBtn">✕</button></div>`).join('');
+  let chosenHtml=pickerChosen.map((item,i)=>`<div class="card pickRow" data-idx="${i}" style="padding:8px 10px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="dragHandle"></span><span style="flex:1">${esc(item.name)}</span><input type="number" min="1" max="999" value="${item.sets}" class="setsInput" data-setsfor="${i}"><span class="muted small">sets</span><button data-rmpick="${i}" class="textBtn">✕</button></div>`).join('');
   let groups={};
   Object.keys(EX).sort().forEach(n=>{if(!pickerChosen.some(x=>x.name===n)){let g=info(n)[0];(groups[g]=groups[g]||[]).push(n)}});
   let addHtml=Object.keys(groups).sort().map(g=>`<div class="pickerGroup"><div class="pickerGroupLabel">${esc(g)}</div>${groups[g].map(n=>`<div class="checkRow" data-addpick="${esc(n)}" style="cursor:pointer"><span>+ ${esc(n)}</span></div>`).join('')}</div>`).join('');
@@ -407,57 +402,64 @@ $('saveAddRoutine').onclick=()=>{
   $('addRoutineForm').classList.add('hidden');
   workout();
 };
-function showChoiceModal(title,body,btn1,btn2){
+function showChoiceModal(title,body,btn1,btn2,btn3){
   return new Promise(resolve=>{
     $('modalTitle').textContent=title;
     $('modalBody').textContent=body;
     $('modalBtn1').textContent=btn1;
     $('modalBtn2').textContent=btn2;
+    $('modalBtn3').classList.toggle('hidden',!btn3);
     $('modalOverlay').classList.remove('hidden');
     let done=v=>{$('modalOverlay').classList.add('hidden');resolve(v)};
     $('modalBtn1').onclick=()=>done(1);
     $('modalBtn2').onclick=()=>done(2);
+    $('modalBtn3').onclick=()=>done(0);
   });
 }
+
+function avgReps(sets){return Math.round(sets.reduce((a,s)=>a+(+s.reps||0),0)/sets.length)}
 
 $('finishWorkout').onclick=async()=>{
   let ex=cur.exercises.map(e=>({...e,sets:e.sets.filter(s=>s.done)})).filter(e=>e.sets.length);
   if(!ex.length)return alert('Complete at least one set first.');
   let vol=ex.reduce((a,e)=>a+e.sets.reduce((b,s)=>b+(+s.weight||0)*(+s.reps||0),0),0);
-  data.workouts.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex});
-  save();
-  await syncRoutineTemplate(ex);
-  cur={routine:cur.routine,started:null,exercises:[],active:false};alert('Workout saved!');nav('dashboard');
-  dashboard();performance();
-};
 
-function avgReps(sets){return Math.round(sets.reduce((a,s)=>a+(+s.reps||0),0)/sets.length)}
-
-async function syncRoutineTemplate(performed){
   let entries=routineEntries(data.routines[cur.routine]);
   let names=entries.map(e=>e.name);
-  let added=performed.filter(e=>!names.includes(e.name));
-  let changed=performed.filter(e=>{
+  let added=ex.filter(e=>!names.includes(e.name));
+  let changed=ex.filter(e=>{
     if(added.includes(e))return false;
     let t=entries.find(x=>x.name===e.name);
     return t.sets!==e.sets.length||(t.reps&&t.reps!==avgReps(e.sets));
   });
-  if(!added.length&&!changed.length)return;
 
-  let lines=[];
-  if(added.length)lines.push('Added: '+added.map(e=>`${e.name} (${e.sets.length}×${avgReps(e.sets)})`).join(', '));
-  if(changed.length)lines.push('Changed: '+changed.map(e=>`${e.name} (${e.sets.length}×${avgReps(e.sets)})`).join(', '));
+  let templateChoice=null;
+  if(added.length||changed.length){
+    let lines=[];
+    if(added.length)lines.push('Added: '+added.map(e=>`${e.name} (${e.sets.length}×${avgReps(e.sets)})`).join(', '));
+    if(changed.length)lines.push('Changed: '+changed.map(e=>`${e.name} (${e.sets.length}×${avgReps(e.sets)})`).join(', '));
+    let choice=await showChoiceModal(`Finish "${cur.routine}"?`,lines.join('\n'),'Exercises and Sets/Reps','Sets/Reps','Cancel');
+    if(choice===0)return;
+    templateChoice=choice;
+  }else{
+    if(!confirm('Finish this workout?'))return;
+  }
 
-  let choice=await showChoiceModal(`Update "${cur.routine}" template?`,lines.join('\n'),'Exercises and Sets/Reps','Sets/Reps');
+  data.workouts.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex});
+  save();
 
-  if(choice===1){
-    data.routines[cur.routine]=performed.map(e=>({name:e.name,sets:e.sets.length,reps:avgReps(e.sets)}));
-  }else if(choice===2&&changed.length){
+  if(templateChoice===1){
+    data.routines[cur.routine]=ex.map(e=>({name:e.name,sets:e.sets.length,reps:avgReps(e.sets)}));
+    save();
+  }else if(templateChoice===2&&changed.length){
     changed.forEach(e=>{let t=entries.find(x=>x.name===e.name);t.sets=e.sets.length;t.reps=avgReps(e.sets)});
     data.routines[cur.routine]=entries;
+    save();
   }
-  save();
-}
+
+  cur={routine:cur.routine,started:null,exercises:[],active:false};alert('Workout saved!');nav('dashboard');
+  dashboard();performance();
+};
 $('cancelWorkoutBtn').onclick=()=>{
   if(!confirm('Cancel this workout? Nothing will be saved.'))return;
   cur={routine:cur.routine,started:null,exercises:[],active:false};
