@@ -97,6 +97,7 @@ function stopSetTimer(eIdx, sIdx){
 function workout(){
   if(!data.routines[cur.routine])cur.routine=Object.keys(data.routines)[0];
 
+  $('workoutTitle').textContent=cur.active?'Workout':'Workouts';
   $('newWorkout').classList.toggle('hidden',!cur.active);
   $('addRoutineBtn').classList.toggle('hidden',cur.active);
   $('editRoutinesBtn').classList.toggle('hidden',cur.active);
@@ -205,45 +206,55 @@ function initExerciseDrag(){
     handle.onpointerdown=e=>{
       e.preventDefault();
       let card=handle.closest('.exercise');
-      let startY=e.clientY;
       try{card.setPointerCapture(e.pointerId)}catch(err){}
       card.classList.add('dragging');
       list.classList.add('reordering');
 
-      let onMove=ev=>{
-        let dy=ev.clientY-startY;
-        card.style.transform=`translateY(${dy}px)`;
+      let cardH=card.getBoundingClientRect().height;
+      let curY=e.clientY;
+      let translateY=0;
+
+      function applyTransform(){
+        let staticTop=card.getBoundingClientRect().top-translateY;
+        translateY=curY-(staticTop+cardH/2);
+        card.style.transform=`translateY(${translateY}px)`;
+      }
+      applyTransform();
+
+      function checkSwap(){
         let guard=0;
         while(guard++<20){
-          let rect=card.getBoundingClientRect();
-          let center=rect.top+rect.height/2;
           let next=card.nextElementSibling;
           if(next&&next.classList.contains('exercise')){
             let nr=next.getBoundingClientRect();
-            if(center>nr.top+nr.height/2){
-              list.insertBefore(next,card);
-              startY=ev.clientY;
-              card.style.transform='translateY(0px)';
-              continue;
-            }
+            if(curY>nr.top+nr.height/2){list.insertBefore(next,card);applyTransform();continue}
           }
           let prev=card.previousElementSibling;
           if(prev&&prev.classList.contains('exercise')){
             let pr=prev.getBoundingClientRect();
-            if(center<pr.top+pr.height/2){
-              list.insertBefore(card,prev);
-              startY=ev.clientY;
-              card.style.transform='translateY(0px)';
-              continue;
-            }
+            if(curY<pr.top+pr.height/2){list.insertBefore(card,prev);applyTransform();continue}
           }
           break;
         }
-      };
-      let onUp=ev=>{
+      }
+
+      let scrollRAF=null;
+      function scrollLoop(){
+        let margin=90,maxSpeed=16,vh=window.innerHeight;
+        let dy=0;
+        if(curY<margin)dy=-maxSpeed*(1-curY/margin);
+        else if(curY>vh-margin)dy=maxSpeed*(1-(vh-curY)/margin);
+        if(dy){window.scrollBy(0,dy);applyTransform();checkSwap()}
+        scrollRAF=requestAnimationFrame(scrollLoop);
+      }
+      scrollRAF=requestAnimationFrame(scrollLoop);
+
+      let onMove=ev=>{curY=ev.clientY;applyTransform();checkSwap()};
+      let onUp=()=>{
         list.removeEventListener('pointermove',onMove);
         list.removeEventListener('pointerup',onUp);
         list.removeEventListener('pointercancel',onUp);
+        if(scrollRAF)cancelAnimationFrame(scrollRAF);
         card.classList.remove('dragging');
         list.classList.remove('reordering');
         card.style.transform='';
