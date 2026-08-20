@@ -98,8 +98,9 @@ function workout(){
   if(!data.routines[cur.routine])cur.routine=Object.keys(data.routines)[0];
 
   $('newWorkout').classList.toggle('hidden',!cur.active);
+  $('addRoutineBtn').classList.toggle('hidden',cur.active);
+  $('editRoutinesBtn').classList.toggle('hidden',cur.active);
   $('routineGrid').classList.toggle('hidden',cur.active);
-  $('routineActions').classList.toggle('hidden',cur.active);
   if(cur.active){$('addRoutineForm').classList.add('hidden');editingRoutines=false}else{$('addExerciseForm').classList.add('hidden')}
   $('editRoutinesBtn').textContent=editingRoutines?'Done editing':'Edit routines';
   $('routinePreview').classList.toggle('hidden',cur.active||editingRoutines);
@@ -297,17 +298,15 @@ function renderAddExercisePicker(filter){
 let pickerChosen=[];
 function renderExercisePicker(initial){
   pickerChosen=(initial||[]).map(e=>typeof e==='string'?{name:e,sets:3}:{name:e.name,sets:e.sets||3});
-  drawPicker();
+  $('routineExerciseSearch').value='';
+  renderChosenList();
+  renderAddList();
 }
-function drawPicker(){
-  let chosenHtml=pickerChosen.map((item,i)=>`<div class="card pickRow" data-idx="${i}" style="padding:8px 10px;display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="dragHandle"></span><span style="flex:1">${esc(item.name)}</span><input type="number" min="1" max="999" value="${item.sets}" class="setsInput" data-setsfor="${i}"><span class="muted small">sets</span><button data-rmpick="${i}" class="textBtn">✕</button></div>`).join('');
-  let groups={};
-  Object.keys(EX).sort().forEach(n=>{if(!pickerChosen.some(x=>x.name===n)){let g=info(n)[0];(groups[g]=groups[g]||[]).push(n)}});
-  let addHtml=Object.keys(groups).sort().map(g=>`<div class="pickerGroup"><div class="pickerGroupLabel">${esc(g)}</div>${groups[g].map(n=>`<div class="checkRow" data-addpick="${esc(n)}" style="cursor:pointer"><span>+ ${esc(n)}</span></div>`).join('')}</div>`).join('');
-  $('exercisePicker').innerHTML=`<div class="pickerGroupLabel">Chosen (drag to reorder)</div><div id="chosenList">${chosenHtml}</div><div class="pickerGroupLabel" style="margin-top:10px">Add exercises</div>${addHtml}`;
-  $('exercisePicker').querySelectorAll('[data-addpick]').forEach(el=>el.onclick=()=>{pickerChosen.push({name:el.dataset.addpick,sets:3});drawPicker()});
-  $('exercisePicker').querySelectorAll('[data-rmpick]').forEach(el=>el.onclick=()=>{pickerChosen.splice(+el.dataset.rmpick,1);drawPicker()});
-  $('exercisePicker').querySelectorAll('[data-setsfor]').forEach(el=>el.onchange=()=>{pickerChosen[+el.dataset.setsfor].sets=Math.max(1,+el.value||3)});
+function renderChosenList(){
+  let html=pickerChosen.map((item,i)=>`<div class="card pickRow" data-idx="${i}"><span class="dragHandle"></span><span class="pickRowName">${esc(item.name)}</span><input type="number" min="1" max="999" value="${item.sets}" class="setsInput" data-setsfor="${i}"><button data-rmpick="${i}" class="textBtn">✕</button></div>`).join('');
+  $('chosenList').innerHTML=html||'<div class="empty">No exercises chosen yet.</div>';
+  $('chosenList').querySelectorAll('[data-rmpick]').forEach(el=>el.onclick=()=>{pickerChosen.splice(+el.dataset.rmpick,1);renderChosenList();renderAddList()});
+  $('chosenList').querySelectorAll('[data-setsfor]').forEach(el=>el.onchange=()=>{pickerChosen[+el.dataset.setsfor].sets=Math.max(1,+el.value||3)});
   let list=$('chosenList');
   list.querySelectorAll('.dragHandle').forEach(handle=>{
     handle.onpointerdown=e=>{
@@ -333,12 +332,25 @@ function drawPicker(){
         list.removeEventListener('pointermove',onMove);list.removeEventListener('pointerup',onUp);list.removeEventListener('pointercancel',onUp);
         let newOrder=[...list.children].filter(c=>c.classList.contains('pickRow')).map(c=>+c.dataset.idx);
         pickerChosen=newOrder.map(i=>pickerChosen[i]);
-        drawPicker();
+        renderChosenList();
       };
       list.addEventListener('pointermove',onMove);list.addEventListener('pointerup',onUp);list.addEventListener('pointercancel',onUp);
     };
   });
 }
+function renderAddList(){
+  let q=$('routineExerciseSearch').value.trim().toLowerCase();
+  let groups={};
+  Object.keys(EX).sort().forEach(n=>{
+    if(pickerChosen.some(x=>x.name===n))return;
+    if(q&&!n.toLowerCase().includes(q))return;
+    let g=info(n)[0];(groups[g]=groups[g]||[]).push(n);
+  });
+  let html=Object.keys(groups).sort().map(g=>`<div class="pickerGroup"><div class="pickerGroupLabel">${esc(g)}</div>${groups[g].map(n=>`<div class="checkRow" data-addpick="${esc(n)}" style="cursor:pointer"><span>+ ${esc(n)}</span></div>`).join('')}</div>`).join('');
+  $('exercisePicker').innerHTML=html||'<div class="empty">No matches.</div>';
+  $('exercisePicker').querySelectorAll('[data-addpick]').forEach(el=>el.onclick=()=>{pickerChosen.push({name:el.dataset.addpick,sets:3});renderChosenList();renderAddList()});
+}
+$('routineExerciseSearch').oninput=()=>renderAddList();
 
 function openRoutineEditor(key){
   editingRoutineKey=key;

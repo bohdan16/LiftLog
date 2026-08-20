@@ -187,13 +187,28 @@ h3{margin:0}
 .modalTitle{font-weight:700;margin-bottom:6px}
 .modalBody{white-space:pre-line;margin-bottom:14px}
 
+.pickRow{
+  padding:8px 10px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:8px;
+}
+.pickRowName{
+  flex:1;
+  min-width:0;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
 .setsInput{
-  width:66px;
+  width:46px;
+  flex:none;
   background:var(--card);
   color:#fff;
   border:1px solid var(--input-border);
   border-radius:6px;
-  padding:4px 4px 4px 8px;
+  padding:4px 2px 4px 6px;
   text-align:left;
   font-size:13px;
 }
