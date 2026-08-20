@@ -20,14 +20,14 @@ let editingRoutines=false,editingRoutineKey=null;
 const $=id=>document.getElementById(id); const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data)); const dk=d=>new Date(d).toISOString().slice(0,10); const fd=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 
-function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.nav===id))}
+function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.nav===id));if(id==='dashboard')dashboard();if(id==='performance')performance()}
 document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));
 function info(n){return EX[n]||['Other',[]]};
 function setsFor(n){let a=[];data.workouts.forEach(w=>(w.exercises||[]).filter(e=>e.name===n).forEach(e=>(e.sets||[]).forEach(s=>{let wt=+s.weight||0,r=+s.reps||0;if(wt&&r)a.push({weight:wt,reps:r,date:w.date})})));return a}
 function best(n){let a=setsFor(n);return{weight:Math.max(0,...a.map(x=>x.weight)),reps:Math.max(0,...a.map(x=>x.reps))}}
 function oneRM(n){return Math.max(0,...setsFor(n).map(x=>x.weight*(1+x.reps/30)))}
 function epleyRM(wt,reps,range){if(!wt||!reps)return 0;let est=wt*(1+reps/30);return est*range}
-function suggest(n){let a=setsFor(n);if(!a.length)return'First session: choose a comfortable weight';let s=a[a.length-1],w=s.weight;if(s.reps>=12)return`Next: ${Math.round((w+5)/5)*5} lb`;if(s.reps<=6)return`Next: ${Math.round((w+10)/5)*5} lb`;return`Next: ${Math.round((w+2.5)/5)*5} lb`}
+function suggest(n){let a=setsFor(n);if(!a.length)return'First session: pick a weight you can control for 6–8 reps';let s=a[a.length-1],w=s.weight,r=s.reps,r5=x=>Math.round(x/5)*5;if(r<6)return`Last set ${w} lb × ${r} — drop to ${r5(w*0.9)} lb to land in the 6–8 rep range`;if(r>8)return`Last set ${w} lb × ${r} — add ${r5(w*1.05)} lb to bring reps back down to 6–8`;if(r===8)return`Last set ${w} lb × 8, top of range — add 5 lb next session`;return`Last set ${w} lb × ${r}, in the 6–8 range — hold this weight until you hit 8 reps, then add 5 lb`}
 
 function makeSet(b){
   return {weight:b.weight||'',reps:b.reps||'',done:false,restSec:data.settings.rest||90,timerEnd:null,timerDuration:null};
@@ -489,7 +489,8 @@ function bars(cv,obj,unit){
   let s=chartSetup(cv);if(!s)return;
   let{ctx,w,h}=s;
   let entries=Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  if(!entries.length){emptyChart(ctx,w,h);return}
+  if(!entries.length){emptyChart(ctx,w,h,'No workouts yet');return}
+  let total=entries.reduce((a,x)=>a+x[1],0)||1;
   let max=Math.max(...entries.map(x=>x[1]),1);
   let rowH=Math.min(26,(h-8)/entries.length);
   let labelW=100;
@@ -498,12 +499,58 @@ function bars(cv,obj,unit){
     let y=6+i*rowH;
     ctx.fillStyle='#9aa6b8';ctx.textAlign='left';
     ctx.fillText(k.length>13?k.slice(0,12)+'…':k,4,y+rowH*0.62);
-    let barMax=Math.max(10,w-labelW-56);
+    let barMax=Math.max(10,w-labelW-90);
     let barW=Math.max(2,(barMax*v)/max);
     ctx.fillStyle='#aebcff';
     ctx.fillRect(labelW,y+3,barW,Math.max(4,rowH-10));
     ctx.fillStyle='#eef1ff';
-    ctx.fillText(Math.round(v).toLocaleString()+(unit?' '+unit:''),labelW+barW+6,y+rowH*0.62);
+    let pct=Math.round((v/total)*100);
+    ctx.fillText(`${Math.round(v).toLocaleString()}${unit?' '+unit:''} (${pct}%)`,labelW+barW+6,y+rowH*0.62);
+  });
+}
+
+function rangeChart(cv,labels,lowVals,highVals,baseStep,unit){
+  let s=chartSetup(cv);if(!s)return;
+  let{ctx,w,h}=s;
+  if(!labels.length||highVals.every(v=>!v)){emptyChart(ctx,w,h,'No data yet');return}
+  let left=50,right=12,top=10,bottom=20;
+  let plotW=Math.max(10,w-left-right),plotH=Math.max(10,h-top-bottom);
+  let maxVal=Math.max(...highVals,0);
+  let step=niceStep(maxVal,baseStep);
+  let count=Math.max(1,Math.ceil(maxVal/step));
+  let niceMax=step*count;
+  let xy=(vals,i)=>[left+(plotW*i)/Math.max(1,labels.length-1),top+plotH-(vals[i]/niceMax)*plotH];
+
+  ctx.font='10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+  ctx.lineWidth=1;
+  for(let i=0;i<=count;i++){
+    let v=step*i,y=top+plotH-(v/niceMax)*plotH;
+    ctx.strokeStyle='rgba(140,153,170,.12)';
+    ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
+    ctx.fillStyle='#8995a6';ctx.textAlign='right';
+    ctx.fillText(Math.round(v).toLocaleString()+(unit?' '+unit:''),left-8,y+3);
+  }
+  labels.forEach((lb,i)=>{
+    let[x]=xy(highVals,i);
+    ctx.fillStyle='#8995a6';ctx.textAlign='center';
+    ctx.fillText(lb||'',x,h-6);
+  });
+
+  ctx.beginPath();
+  highVals.forEach((v,i)=>{let[x,y]=xy(highVals,i);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  for(let i=lowVals.length-1;i>=0;i--){let[x,y]=xy(lowVals,i);ctx.lineTo(x,y)}
+  ctx.closePath();ctx.fillStyle='rgba(174,188,255,.16)';ctx.fill();
+
+  ctx.beginPath();
+  lowVals.forEach((v,i)=>{let[x,y]=xy(lowVals,i);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  ctx.strokeStyle='#7180bd';ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+
+  ctx.beginPath();
+  highVals.forEach((v,i)=>{let[x,y]=xy(highVals,i);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  ctx.strokeStyle='#aebcff';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+
+  [[lowVals,'#7180bd'],[highVals,'#aebcff']].forEach(([vals,color])=>{
+    vals.forEach((v,i)=>{let[x,y]=xy(vals,i);ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,2.6,0,Math.PI*2);ctx.fill()});
   });
 }
 
@@ -573,9 +620,11 @@ function updateProgress(n){
   let trend={};
   a.forEach(s=>{let k=dk(s.date),est=s.weight*(1+s.reps/30);trend[k]=Math.max(trend[k]||0,est)});
   let keys=Object.keys(trend).sort().slice(-14);
-  detailedLine($('strengthChart'),keys.map(k=>trend[k]),keys.map(k=>k.slice(5)),5,'lb');
+  let sixVals=keys.map(k=>trend[k]/1.2);
+  let eightVals=keys.map(k=>trend[k]/(1+8/30));
+  rangeChart($('strengthChart'),keys.map(k=>k.slice(5)),eightVals,sixVals,5,'lb');
 
-  $('progressDetails').innerHTML=`<div class="card"><b>Progression recommendation</b><p class="muted small">${esc(suggest(n))}. Estimated 1RM uses the Epley formula.</p></div>`;
+  $('progressDetails').innerHTML=`<div class="card"><b>Progression recommendation</b><p class="muted small">${esc(suggest(n))}. Shaded band shows your estimated 6–8 rep working range — widen/rise it by adding load once you can hit 8 reps.</p></div>`;
 }
 
 function renderMuscleChart(){
