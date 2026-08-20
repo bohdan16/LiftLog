@@ -419,38 +419,69 @@ function emptyChart(ctx,w,h,msg){
   ctx.fillText(msg||'No data yet',w/2,h/2);
 }
 
-function detailedLine(cv,vals,labels,step,unit){
+function niceStep(maxVal,base){
+  if(maxVal<=0)return base;
+  let mults=[1,2,3,4,5,6,8,10,15,20,25,30,40,50,75,100,150,200];
+  for(let m of mults){
+    let step=base*m;
+    if(Math.ceil(maxVal/step)<=6)return step;
+  }
+  return base*Math.ceil(maxVal/(base*200));
+}
+
+function detailedLine(cv,vals,labels,baseStep,unit,opts){
+  opts=opts||{};
   let s=chartSetup(cv);if(!s)return;
   let{ctx,w,h}=s;
-  if(!vals||!vals.length||vals.every(v=>!v)){emptyChart(ctx,w,h);return}
-  let left=48,right=8,top=10,bottom=20;
+  if(!vals||!vals.length||vals.every(v=>!v)){emptyChart(ctx,w,h,opts.emptyMsg);return}
+  let left=50,right=12,top=opts.showValues?22:10,bottom=20;
   let plotW=Math.max(10,w-left-right),plotH=Math.max(10,h-top-bottom);
-  let maxVal=Math.max(...vals,0);
-  let niceMax=Math.max(step,Math.ceil(maxVal/step)*step);
-  let count=Math.max(1,Math.min(5,Math.round(niceMax/step)));
+  let maxVal=Math.max(...vals,0,opts.avgLine||0);
+  let step=niceStep(maxVal,baseStep);
+  let count=Math.max(1,Math.ceil(maxVal/step));
+  let niceMax=step*count;
+
   ctx.font='10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
   ctx.lineWidth=1;
   for(let i=0;i<=count;i++){
-    let v=(niceMax/count)*i,y=top+plotH-(v/niceMax)*plotH;
-    ctx.strokeStyle='rgba(140,153,170,.14)';
+    let v=step*i,y=top+plotH-(v/niceMax)*plotH;
+    ctx.strokeStyle='rgba(140,153,170,.12)';
     ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
     ctx.fillStyle='#8995a6';ctx.textAlign='right';
-    ctx.fillText(Math.round(v).toLocaleString()+(unit?' '+unit:''),left-6,y+3);
+    ctx.fillText(Math.round(v).toLocaleString()+(unit?' '+unit:''),left-8,y+3);
   }
+
   vals.forEach((v,i)=>{
     let x=left+(plotW*i)/Math.max(1,vals.length-1);
+    ctx.strokeStyle='rgba(140,153,170,.06)';
+    ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,top+plotH);ctx.stroke();
     ctx.fillStyle='#8995a6';ctx.textAlign='center';
     ctx.fillText(labels[i]||'',x,h-6);
   });
+
+  if(opts.avgLine!=null&&niceMax>0){
+    let y=top+plotH-(opts.avgLine/niceMax)*plotH;
+    ctx.save();ctx.setLineDash([4,4]);
+    ctx.strokeStyle='rgba(174,188,255,.5)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
+    ctx.restore();
+  }
+
   ctx.beginPath();
   vals.forEach((v,i)=>{
     let x=left+(plotW*i)/Math.max(1,vals.length-1),y=top+plotH-(v/niceMax)*plotH;
     i?ctx.lineTo(x,y):ctx.moveTo(x,y);
   });
   ctx.strokeStyle='#aebcff';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+
   vals.forEach((v,i)=>{
     let x=left+(plotW*i)/Math.max(1,vals.length-1),y=top+plotH-(v/niceMax)*plotH;
     ctx.fillStyle='#aebcff';ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();
+    if(opts.showValues){
+      ctx.fillStyle='#c7d0ff';ctx.font='10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(String(Math.round(v)),x,y-8);
+    }
   });
 }
 
@@ -492,7 +523,7 @@ function dashboard(){
     vals.push(data.workouts.filter(w=>dk(w.date)===dk(d)).reduce((a,x)=>a+(+x.volume||0),0));
     labels.push(d.toLocaleDateString(undefined,{weekday:'short'}));
   }
-  detailedLine($('volumeChart'),vals,labels,5000,'lb');
+  detailedLine($('volumeChart'),vals,labels,2000,'lb');
 
   let prs=Object.keys(EX).map(n=>[n,best(n).weight]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).slice(0,5);
   $('prs').innerHTML=prs.map(x=>`<div class="card pr"><span><b>${esc(x[0])}</b><br><span class="muted small">Weight PR</span></span><b>${x[1]} lb</b></div>`).join('')||'<div class="empty">Complete a workout to start tracking PRs.</div>';
@@ -510,16 +541,34 @@ function performance(){
 $('progressExercise').onchange=e=>updateProgress(e.target.value);
 $('historyToggle').onclick=()=>{
   let hidden=$('historyList').classList.toggle('hidden');
-  $('historyToggle').textContent=hidden?'History':'Hide history';
+  $('historyToggle').textContent=hidden?'Show history':'Hide history';
 };
 
 function updateProgress(n){
-  let a=setsFor(n),b=best(n),rm=oneRM(n);
-  let volTotal=a.reduce((x,s)=>x+s.weight*s.reps,0);
-  $('bestWeight').textContent=`${b.weight||0} lb`;
-  $('bestReps').textContent=`${b.reps||0}`;
+  let a=setsFor(n),rm=oneRM(n);
+
+  // Row 1: PR volume (best single set by weight*reps) + that set's weight/reps
+  let prSet={weight:0,reps:0,volume:0};
+  a.forEach(s=>{
+    let vol=s.weight*s.reps;
+    if(vol>prSet.volume||(vol===prSet.volume&&s.weight>prSet.weight))prSet={weight:s.weight,reps:s.reps,volume:vol};
+  });
+  $('prVolume').textContent=`${Math.round(prSet.volume).toLocaleString()} lb`;
+  $('prWeightReps').textContent=`${prSet.weight||0} lb × ${prSet.reps||0}`;
+
+  // Row 2: weekly / monthly volume
+  let weekStart=new Date();weekStart.setDate(weekStart.getDate()-7);
+  let weekVol=a.filter(s=>new Date(s.date)>=weekStart).reduce((x,s)=>x+s.weight*s.reps,0);
+  let monthStart=new Date();monthStart.setDate(monthStart.getDate()-30);
+  let monthVol=a.filter(s=>new Date(s.date)>=monthStart).reduce((x,s)=>x+s.weight*s.reps,0);
+  $('weeklyVolume').textContent=`${Math.round(weekVol).toLocaleString()} lb`;
+  $('monthlyVolume').textContent=`${Math.round(monthVol).toLocaleString()} lb`;
+
+  // Row 3: 1RM + estimated 6-8RM range (Epley: 1RM = weight * (1 + reps/30))
+  let sixRM=rm/1.2;             // weight at 6 reps: rm = w*(1+6/30) = w*1.2
+  let eightRM=rm/(1+8/30);      // weight at 8 reps
   $('best1rm').textContent=`${Math.round(rm)} lb`;
-  $('exerciseVolume').textContent=`${Math.round(volTotal).toLocaleString()} lb`;
+  $('est68rm').textContent=`${Math.round(eightRM)}–${Math.round(sixRM)} lb`;
 
   let trend={};
   a.forEach(s=>{let k=dk(s.date),est=s.weight*(1+s.reps/30);trend[k]=Math.max(trend[k]||0,est)});
@@ -546,7 +595,10 @@ function renderFrequencyChart(){
     vals.push(data.workouts.filter(w=>new Date(w.date)>=start&&new Date(w.date)<end).length);
     labels.push(i===0?'This wk':i+'w ago');
   }
-  detailedLine($('frequencyChart'),vals,labels,1,'wk');
+  let avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+  detailedLine($('frequencyChart'),vals,labels,1,'',{showValues:true,avgLine:avg,emptyMsg:'No workouts yet'});
+  let cur=vals[vals.length-1],lbl=$('freqAvgLabel');
+  if(lbl)lbl.textContent=vals.some(v=>v)?`8-week average: ${avg.toFixed(1)} workouts/wk (dashed line) • This week: ${cur} • ${cur>=avg?'At or above average':'Below average'}`:'';
 }
 
 function history(){
