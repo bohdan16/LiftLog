@@ -850,3 +850,27 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=
 $('installBtn').onclick=async()=>{if(installEvt){installEvt.prompt();installEvt.userChoice.then(r=>{if(r.outcome==='accepted'){installEvt=null;$('installBtn').classList.add('hidden')}})}};
 
 dashboard();workout();performance();settings();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      reg.addEventListener('updatefound',()=>{
+        let installing=reg.installing;
+        if(!installing)return;
+        installing.addEventListener('statechange',()=>{
+          if(installing.state==='installed'&&navigator.serviceWorker.controller){
+            installing.postMessage('skipWaiting');
+          }
+        });
+      });
+      document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update()});
+      setInterval(()=>reg.update(),60*60*1000);
+    }).catch(()=>{});
+  });
+  let reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(reloaded)return;
+    reloaded=true;
+    location.reload();
+  });
+}
