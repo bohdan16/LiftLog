@@ -21,7 +21,6 @@ function info(n){return EX[n]||['Other',[]]};
 function setsFor(n){let a=[];data.workouts.forEach(w=>(w.exercises||[]).filter(e=>e.name===n).forEach(e=>(e.sets||[]).forEach(s=>{let wt=+s.weight||0,r=+s.reps||0;if(wt&&r)a.push({weight:wt,reps:r,date:w.date})})));return a}
 function best(n){let a=setsFor(n);return{weight:Math.max(0,...a.map(x=>x.weight)),reps:Math.max(0,...a.map(x=>x.reps))}}
 function oneRM(n){return Math.max(0,...setsFor(n).map(x=>x.weight*(1+x.reps/30)))}
-function epleyRM(wt,reps,range){if(!wt||!reps)return 0;let est=wt*(1+reps/30);return est*range}
 function suggest(n){let a=setsFor(n);if(!a.length)return'First session: pick a weight you can control for 6–8 reps';let s=a[a.length-1],w=s.weight,r=s.reps,r5=x=>Math.round(x/5)*5;if(r<6)return`Last set ${w} lb × ${r} — drop to ${r5(w*0.9)} lb to land in the 6–8 rep range`;if(r>8)return`Last set ${w} lb × ${r} — add ${r5(w*1.05)} lb to bring reps back down to 6–8`;if(r===8)return`Last set ${w} lb × 8, top of range — add 5 lb next session`;return`Last set ${w} lb × ${r}, in the 6–8 range — hold this weight until you hit 8 reps, then add 5 lb`}
 
 function routineEntries(list){

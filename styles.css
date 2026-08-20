@@ -80,31 +80,6 @@ h3{margin:0}
   margin:4px 0;
   font-variant-numeric:tabular-nums;
 }
-.heroStat{
-  text-align:right;
-  position:relative;
-}
-.heroStat strong{
-  display:block;
-  font-size:25px;
-  font-variant-numeric:tabular-nums;
-}
-.goalbar{
-  width:120px;
-  height:6px;
-  background:#293241;
-  border-radius:99px;
-  overflow:hidden;
-  margin:7px 0 3px auto;
-}
-.goalbar i{
-  display:block;
-  height:100%;
-  width:0;
-  background:linear-gradient(90deg,var(--accent-dim),var(--accent));
-  transition:width .5s var(--ease);
-}
-
 .grid2{
   display:grid;
   grid-template-columns:1fr 1fr;
@@ -133,13 +108,6 @@ h3{margin:0}
   box-shadow:0 0 0 1px var(--accent) inset;
 }
 .routineCard.selected span{
-  color:var(--accent);
-}
-.routineCard.editing{
-  border-style:dashed;
-  border-color:var(--muted-2);
-}
-.routineCard.editing b{
   color:var(--accent);
 }
 .pickerGroup{
@@ -568,10 +536,6 @@ h3{margin:0}
   border-color:var(--accent);
   box-shadow:0 0 0 3px var(--accent-wash);
 }
-.subform{
-  display:grid;
-  gap:8px;
-}
 .muted{
   color:var(--muted);
 }
@@ -586,7 +550,7 @@ h3{margin:0}
   color:#b9c5ff;
   white-space:nowrap;
 }
-.pr,.historyItem,.routineRow{
+.pr,.routineRow{
   display:flex;
   justify-content:space-between;
   gap:10px;
@@ -654,12 +618,6 @@ h3{margin:0}
 }
 #workoutEndActions{
   margin-top:14px;
-}
-.exerciseTitleRow{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  min-width:0;
 }
 .dragHandle{
   width:20px;
