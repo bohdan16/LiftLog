@@ -29,12 +29,21 @@ function oneRM(n){return Math.max(0,...setsFor(n).map(x=>x.weight*(1+x.reps/30))
 function epleyRM(wt,reps,range){if(!wt||!reps)return 0;let est=wt*(1+reps/30);return est*range}
 function suggest(n){let a=setsFor(n);if(!a.length)return'First session: pick a weight you can control for 6–8 reps';let s=a[a.length-1],w=s.weight,r=s.reps,r5=x=>Math.round(x/5)*5;if(r<6)return`Last set ${w} lb × ${r} — drop to ${r5(w*0.9)} lb to land in the 6–8 rep range`;if(r>8)return`Last set ${w} lb × ${r} — add ${r5(w*1.05)} lb to bring reps back down to 6–8`;if(r===8)return`Last set ${w} lb × 8, top of range — add 5 lb next session`;return`Last set ${w} lb × ${r}, in the 6–8 range — hold this weight until you hit 8 reps, then add 5 lb`}
 
+function routineEntries(list){
+  return (list||[]).map(e=>typeof e==='string'?{name:e,sets:3,reps:null}:{name:e.name,sets:e.sets||3,reps:e.reps||null});
+}
+function routineNames(list){return routineEntries(list).map(e=>e.name)}
+
 function makeSet(b){
   return {weight:b.weight||'',reps:b.reps||'',done:false,restSec:data.settings.rest||90,timerEnd:null,timerDuration:null};
 }
-function make(n){
+function make(n,entry){
   let b=best(n);
-  return {name:n,sets:[makeSet(b),makeSet(b),makeSet(b)]};
+  let setCount=entry&&entry.sets?entry.sets:3;
+  let reps=entry&&entry.reps?entry.reps:b.reps;
+  let sets=[];
+  for(let i=0;i<setCount;i++)sets.push(makeSet({weight:b.weight,reps}));
+  return {name:n,sets};
 }
 
 function startSetTimer(eIdx, sIdx){
@@ -114,7 +123,7 @@ function workout(){
       else{cur.routine=b.dataset.pick;workout()}
     });
 
-    let names=data.routines[cur.routine]||[];
+    let names=routineNames(data.routines[cur.routine]);
     $('routineSummary').textContent=`${names.length} exercises • ${names.join(', ')}`;
     $('exerciseList').innerHTML='';
     $('setsCompleted').textContent='0';
@@ -258,7 +267,8 @@ function initExerciseDrag(){
 $('startWorkoutBtn').onclick=()=>{
   let r=cur.routine;
   if(!confirm(`Start "${r}" workout?`))return;
-  cur={routine:r,started:Date.now(),exercises:data.routines[r].map(make),active:true};
+  let entries=routineEntries(data.routines[r]);
+  cur={routine:r,started:Date.now(),exercises:entries.map(e=>make(e.name,e)),active:true};
   workout();
 };
 
@@ -286,10 +296,6 @@ function renderAddExercisePicker(filter){
     cur.exercises.push(make(b.dataset.pickex));
     $('addExerciseForm').classList.add('hidden');
     workout();
-    if(confirm('Save this as the routine template too?')){
-      data.routines[cur.routine]=cur.exercises.map(e=>e.name);
-      save();
-    }
   });
 }
 
@@ -341,7 +347,7 @@ function drawPicker(){
 function openRoutineEditor(key){
   editingRoutineKey=key;
   $('newRoutineName').value=key;
-  renderExercisePicker(data.routines[key]||[]);
+  renderExercisePicker(routineNames(data.routines[key]));
   $('deleteRoutineBtn').classList.remove('hidden');
   $('saveAddRoutine').textContent='Save changes';
   $('addRoutineForm').classList.remove('hidden');
@@ -405,9 +411,39 @@ $('finishWorkout').onclick=()=>{
   if(!ex.length)return alert('Complete at least one set first.');
   let vol=ex.reduce((a,e)=>a+e.sets.reduce((b,s)=>b+(+s.weight||0)*(+s.reps||0),0),0);
   data.workouts.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex});
-  save();cur={routine:cur.routine,started:null,exercises:[],active:false};alert('Workout saved!');nav('dashboard');
+  save();
+  syncRoutineTemplate(ex);
+  cur={routine:cur.routine,started:null,exercises:[],active:false};alert('Workout saved!');nav('dashboard');
   dashboard();performance();
 };
+
+function avgReps(sets){return Math.round(sets.reduce((a,s)=>a+(+s.reps||0),0)/sets.length)}
+
+function syncRoutineTemplate(performed){
+  let entries=routineEntries(data.routines[cur.routine]);
+  let names=entries.map(e=>e.name);
+  let added=performed.filter(e=>!names.includes(e.name));
+  let changed=performed.filter(e=>{
+    if(added.includes(e))return false;
+    let t=entries.find(x=>x.name===e.name);
+    return t.sets!==e.sets.length||(t.reps&&t.reps!==avgReps(e.sets));
+  });
+  if(!added.length&&!changed.length)return;
+
+  let lines=[];
+  if(added.length)lines.push('Added: '+added.map(e=>`${e.name} (${e.sets.length}×${avgReps(e.sets)})`).join(', '));
+  if(changed.length)lines.push('Changed: '+changed.map(e=>`${e.name} (${e.sets.length}×${avgReps(e.sets)})`).join(', '));
+
+  let updateTemplate=confirm(`Update "${cur.routine}" template?\n${lines.join('\n')}\n\nOK: add new exercises + update sets/reps\nCancel: only update sets/reps for existing exercises`);
+
+  if(updateTemplate){
+    data.routines[cur.routine]=performed.map(e=>({name:e.name,sets:e.sets.length,reps:avgReps(e.sets)}));
+  }else if(changed.length){
+    changed.forEach(e=>{let t=entries.find(x=>x.name===e.name);t.sets=e.sets.length;t.reps=avgReps(e.sets)});
+    data.routines[cur.routine]=entries;
+  }
+  save();
+}
 $('cancelWorkoutBtn').onclick=()=>{
   if(!confirm('Cancel this workout? Nothing will be saved.'))return;
   cur={routine:cur.routine,started:null,exercises:[],active:false};
