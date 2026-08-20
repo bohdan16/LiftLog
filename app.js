@@ -11,7 +11,7 @@ let data=JSON.parse(localStorage.getItem(KEY)||'null')||{workouts:[],routines:{.
 delete data.routines['Legs A'];delete data.routines['Legs B'];delete data.routines['Legs C'];delete data.routines['Legs'];
 localStorage.setItem(KEY,JSON.stringify(data));
 let cur={routine:Object.keys(data.routines)[0]||'Push A',started:null,exercises:[],active:false},activeTimers={},installEvt=null;
-let editingRoutines=false,editingRoutineKey=null;
+let editingRoutineKey=null;
 const $=id=>document.getElementById(id); const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data)); const dk=d=>new Date(d).toISOString().slice(0,10); const fd=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 
@@ -101,9 +101,8 @@ function workout(){
   $('addRoutineBtn').classList.toggle('hidden',cur.active);
   $('editRoutinesBtn').classList.toggle('hidden',cur.active);
   $('routineGrid').classList.toggle('hidden',cur.active);
-  if(cur.active){$('addRoutineForm').classList.add('hidden');editingRoutines=false}else{$('addExerciseForm').classList.add('hidden')}
-  $('editRoutinesBtn').textContent=editingRoutines?'Done editing':'Edit routines';
-  $('routinePreview').classList.toggle('hidden',cur.active||editingRoutines);
+  if(cur.active){$('addRoutineForm').classList.add('hidden')}else{$('addExerciseForm').classList.add('hidden')}
+  $('routinePreview').classList.toggle('hidden',cur.active);
   $('startWorkoutBtn').classList.toggle('hidden',cur.active);
   $('exerciseList').classList.toggle('hidden',!cur.active);
   $('workoutFooter').classList.toggle('hidden',!cur.active);
@@ -111,13 +110,10 @@ function workout(){
 
   if(!cur.active){
     $('routineGrid').innerHTML=Object.keys(data.routines).map(r=>`
-      <button class="card routineCard${(r===cur.routine&&!editingRoutines)?' selected':''}${editingRoutines?' editing':''}" data-pick="${esc(r)}">
-        <b>${esc(r)}${editingRoutines?' ✎':''}</b><span>${data.routines[r].length} exercises</span>
+      <button class="card routineCard${r===cur.routine?' selected':''}" data-pick="${esc(r)}">
+        <b>${esc(r)}</b><span>${data.routines[r].length} exercises</span>
       </button>`).join('');
-    $('routineGrid').querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{
-      if(editingRoutines){openRoutineEditor(b.dataset.pick)}
-      else{cur.routine=b.dataset.pick;workout()}
-    });
+    $('routineGrid').querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{cur.routine=b.dataset.pick;workout()});
 
     let names=routineNames(data.routines[cur.routine]);
     $('routineSummary').textContent=`${names.length} exercises • ${names.join(', ')}`;
@@ -303,10 +299,16 @@ function renderExercisePicker(initial){
   renderAddList();
 }
 function renderChosenList(){
-  let html=pickerChosen.map((item,i)=>`<div class="card pickRow" data-idx="${i}"><span class="dragHandle"></span><span class="pickRowName">${esc(item.name)}</span><input type="number" min="1" max="999" value="${item.sets}" class="setsInput" data-setsfor="${i}"><button data-rmpick="${i}" class="textBtn">✕</button></div>`).join('');
+  let html=pickerChosen.map((item,i)=>`<div class="card pickRow" data-idx="${i}"><span class="dragHandle"></span><span class="pickRowName">${esc(item.name)}</span><div class="setsStepper" data-setsfor="${i}"><button type="button" class="stepBtn" data-step="-1">−</button><span class="stepVal">${item.sets}</span><button type="button" class="stepBtn" data-step="1">+</button></div><button data-rmpick="${i}" class="textBtn">✕</button></div>`).join('');
   $('chosenList').innerHTML=html||'<div class="empty">No exercises chosen yet.</div>';
   $('chosenList').querySelectorAll('[data-rmpick]').forEach(el=>el.onclick=()=>{pickerChosen.splice(+el.dataset.rmpick,1);renderChosenList();renderAddList()});
-  $('chosenList').querySelectorAll('[data-setsfor]').forEach(el=>el.onchange=()=>{pickerChosen[+el.dataset.setsfor].sets=Math.max(1,+el.value||3)});
+  $('chosenList').querySelectorAll('.setsStepper').forEach(stepper=>{
+    let i=+stepper.dataset.setsfor;
+    stepper.querySelectorAll('.stepBtn').forEach(btn=>btn.onclick=()=>{
+      pickerChosen[i].sets=Math.max(1,Math.min(999,pickerChosen[i].sets+(+btn.dataset.step)));
+      stepper.querySelector('.stepVal').textContent=pickerChosen[i].sets;
+    });
+  });
   let list=$('chosenList');
   list.querySelectorAll('.dragHandle').forEach(handle=>{
     handle.onpointerdown=e=>{
@@ -362,11 +364,7 @@ function openRoutineEditor(key){
   $('newRoutineName').focus();
 }
 
-$('editRoutinesBtn').onclick=()=>{
-  editingRoutines=!editingRoutines;
-  $('addRoutineForm').classList.add('hidden');
-  workout();
-};
+$('editRoutinesBtn').onclick=()=>openRoutineEditor(cur.routine);
 
 $('addRoutineBtn').onclick=()=>{
   editingRoutineKey=null;
