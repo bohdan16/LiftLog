@@ -345,6 +345,19 @@ h3{margin:0}
 }
 .exercise{
   padding:14px;
+  transition:padding .15s var(--ease);
+}
+#exerciseList.reordering .exercise{
+  padding:9px 14px;
+}
+#exerciseList.reordering .exercise .exerciseMeta,
+#exerciseList.reordering .exercise .sets,
+#exerciseList.reordering .exercise .exerciseTools,
+#exerciseList.reordering .exercise .addSet{
+  display:none;
+}
+#exerciseList.reordering .exercise .exerciseHead{
+  margin-bottom:0;
 }
 .exerciseHead{
   display:flex;

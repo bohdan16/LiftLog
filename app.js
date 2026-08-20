@@ -208,6 +208,7 @@ function initExerciseDrag(){
       let startY=e.clientY;
       try{card.setPointerCapture(e.pointerId)}catch(err){}
       card.classList.add('dragging');
+      list.classList.add('reordering');
 
       let onMove=ev=>{
         let dy=ev.clientY-startY;
@@ -244,6 +245,7 @@ function initExerciseDrag(){
         list.removeEventListener('pointerup',onUp);
         list.removeEventListener('pointercancel',onUp);
         card.classList.remove('dragging');
+        list.classList.remove('reordering');
         card.style.transform='';
         let newOrder=[...list.children].filter(c=>c.classList.contains('exercise')).map(c=>+c.dataset.idx);
         cur.exercises=newOrder.map(i=>cur.exercises[i]);
