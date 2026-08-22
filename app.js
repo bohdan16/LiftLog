@@ -19,7 +19,7 @@ function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.tog
 document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));
 function info(n){return EX[n]||['Other',[]]};
 function setsFor(n){let a=[];data.workouts.forEach(w=>(w.exercises||[]).filter(e=>e.name===n).forEach(e=>(e.sets||[]).forEach(s=>{let wt=+s.weight||0,r=+s.reps||0;if(wt&&r)a.push({weight:wt,reps:r,date:w.date})})));return a}
-function best(n){let a=setsFor(n);return{weight:Math.max(0,...a.map(x=>x.weight)),reps:Math.max(0,...a.map(x=>x.reps))}}
+function best(n){let a=setsFor(n);let b={weight:Math.max(0,...a.map(x=>x.weight)),reps:Math.max(0,...a.map(x=>x.reps))};let ov=data.overrides&&data.overrides[n];if(ov&&ov.weight>b.weight){b={weight:ov.weight,reps:ov.reps||b.reps}}return b}
 function oneRM(n){return Math.max(0,...setsFor(n).map(x=>x.weight*(1+x.reps/30)))}
 function suggest(n){let a=setsFor(n);if(!a.length)return'First session: pick a weight you can control for 6–8 reps';let s=a[a.length-1],w=s.weight,r=s.reps,r5=x=>Math.round(x/5)*5;if(r<6)return`Last set ${w} lb × ${r} — drop to ${r5(w*0.9)} lb to land in the 6–8 rep range`;if(r>8)return`Last set ${w} lb × ${r} — add ${r5(w*1.05)} lb to bring reps back down to 6–8`;if(r===8)return`Last set ${w} lb × 8, top of range — add 5 lb next session`;return`Last set ${w} lb × ${r}, in the 6–8 range — hold this weight until you hit 8 reps, then add 5 lb`}
 
@@ -132,9 +132,12 @@ function workout(){
 
   $('exerciseList').innerHTML=cur.exercises.map((e,i)=>{
     let b=best(e.name),inf=info(e.name);
+    let partnerIdx=supersetPartner(i);
+    let pairNote=partnerIdx!=null?`<span class="muted small pairNote">⇄ Paired with ${esc(cur.exercises[partnerIdx].name)} — rest starts once both sides are done</span>`:'';
     return `<div class="card exercise" data-idx="${i}">
       <div class="exerciseDragBar" data-drag>${esc(e.name)}${e.superset?' • SUPERSET':''}</div>
       <div class="exerciseSub"><span class="pill">${esc(inf[0])}</span></div>
+      ${pairNote}
       <div class="exerciseMeta"><span>Best ${b.weight||0} lb × ${b.reps||0}</span><span>${esc(suggest(e.name))}</span></div>
       <div class="sets">${e.sets.map((x,j)=>{
         let timeStr = x.timerEnd ? new Date(Math.max(0, x.timerEnd - Date.now())).toISOString().slice(14,19) : new Date((+x.restSec||90)*1000).toISOString().slice(14,19);
@@ -175,7 +178,16 @@ function workout(){
     if(!(+x.weight&&+x.reps))return alert('Enter weight and reps first.');
     x.done = !x.done;
     if(x.done){
-      startSetTimer(eIdx, sIdx);
+      let partnerIdx=supersetPartner(eIdx);
+      if(partnerIdx!=null){
+        let partnerSet=cur.exercises[partnerIdx]&&cur.exercises[partnerIdx].sets[sIdx];
+        if(partnerSet&&partnerSet.done){
+          startSetTimer(eIdx,sIdx); // both halves of the superset done — rest starts now
+        }
+        // else: waiting on the paired exercise's matching set, no timer yet
+      }else{
+        startSetTimer(eIdx, sIdx);
+      }
     } else {
       stopSetTimer(eIdx, sIdx);
     }
@@ -194,8 +206,10 @@ function workout(){
   });
 
   $('exerciseList').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{
-    let bst = best(cur.exercises[+b.dataset.add].name);
-    cur.exercises[+b.dataset.add].sets.push(makeSet(bst));
+    let ex=cur.exercises[+b.dataset.add];
+    let last=ex.sets[ex.sets.length-1];
+    let src=(last&&(+last.weight||+last.reps))?{weight:last.weight,reps:last.reps}:best(ex.name);
+    ex.sets.push(makeSet(src));
     workout();
   });
   $('exerciseList').querySelectorAll('[data-rem]').forEach(b=>b.onclick=()=>{cur.exercises.splice(+b.dataset.rem,1);workout()});
@@ -203,6 +217,12 @@ function workout(){
   $('exerciseList').querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{let i=+b.dataset.sub,a=info(cur.exercises[i].name)[1];if(!a.length)return alert('No substitution listed.');let n=prompt('Sub with:\n'+a.map((x,j)=>`${j+1}. ${x}`).join('\n'));let idx=(+n||0)-1;if(idx<0||idx>=a.length)return;cur.exercises[i].name=a[idx];workout()});
   $('setsCompleted').textContent=cur.exercises.reduce((a,e)=>a+e.sets.filter(s=>s.done).length,0);
   initExerciseDrag();
+}
+
+function supersetPartner(i){
+  if(cur.exercises[i]&&cur.exercises[i].superset&&cur.exercises[i+1])return i+1;
+  if(cur.exercises[i-1]&&cur.exercises[i-1].superset)return i-1;
+  return null;
 }
 
 function initExerciseDrag(){
@@ -447,6 +467,20 @@ function showChoiceModal(title,body,btn1,btn2,btn3){
 
 function avgReps(sets){return Math.round(sets.reduce((a,s)=>a+(+s.reps||0),0)/sets.length)}
 
+let toastTimer=null;
+function showToast(msg,onUndo){
+  clearTimeout(toastTimer);
+  $('toastMsg').textContent=msg;
+  $('toast').classList.remove('hidden');
+  $('toastUndo').classList.toggle('hidden',!onUndo);
+  $('toastUndo').onclick=()=>{
+    clearTimeout(toastTimer);
+    $('toast').classList.add('hidden');
+    onUndo&&onUndo();
+  };
+  toastTimer=setTimeout(()=>$('toast').classList.add('hidden'),5000);
+}
+
 $('finishWorkout').onclick=async()=>{
   let ex=cur.exercises.map(e=>({...e,sets:e.sets.filter(s=>s.done)})).filter(e=>e.sets.length);
   if(!ex.length)return alert('Complete at least one set first.');
@@ -473,7 +507,9 @@ $('finishWorkout').onclick=async()=>{
     if(!confirm('Finish this workout?'))return;
   }
 
-  data.workouts.unshift({id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex});
+  let routineSnapshot=JSON.parse(JSON.stringify(data.routines[cur.routine]));
+  let workoutRecord={id:crypto.randomUUID(),date:new Date().toISOString(),routine:cur.routine,durationMin:Math.max(1,Math.round((Date.now()-cur.started)/60000)),volume:vol,exercises:ex};
+  data.workouts.unshift(workoutRecord);
   save();
 
   if(templateChoice===1){
@@ -485,8 +521,15 @@ $('finishWorkout').onclick=async()=>{
     save();
   }
 
-  cur={routine:cur.routine,started:null,exercises:[],active:false};alert('Workout saved!');nav('dashboard');
+  let finishedRoutine=cur.routine;
+  cur={routine:cur.routine,started:null,exercises:[],active:false};nav('dashboard');
   dashboard();performance();
+  showToast('Workout saved.',()=>{
+    data.workouts=data.workouts.filter(w=>w.id!==workoutRecord.id);
+    data.routines[finishedRoutine]=routineSnapshot;
+    save();
+    dashboard();performance();settings();
+  });
 };
 $('cancelWorkoutBtn').onclick=()=>{
   if(!confirm('Cancel this workout? Nothing will be saved.'))return;
@@ -510,8 +553,15 @@ function chartSetup(cv){
   return {ctx,w,h};
 }
 
+function themeColors(){
+  let light=document.body.classList.contains('light');
+  return light
+    ? {muted:'#6b7280',accent:'#4a5bc7',accentDim:'#7885d6',accentSoft:'#39469c',gridStrong:'rgba(70,80,120,.15)',gridSoft:'rgba(70,80,120,.08)',fill:'rgba(74,91,199,.14)',text:'#161a22'}
+    : {muted:'#8995a6',accent:'#aebcff',accentDim:'#7180bd',accentSoft:'#c7d0ff',gridStrong:'rgba(140,153,170,.12)',gridSoft:'rgba(140,153,170,.06)',fill:'rgba(174,188,255,.16)',text:'#eef1ff'};
+}
+
 function emptyChart(ctx,w,h,msg){
-  ctx.fillStyle='#6f7b8d';ctx.font='12px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.textAlign='center';
+  ctx.fillStyle=themeColors().muted;ctx.font='12px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.textAlign='center';
   ctx.fillText(msg||'No data yet',w/2,h/2);
 }
 
@@ -529,6 +579,7 @@ function detailedLine(cv,vals,labels,baseStep,unit,opts){
   opts=opts||{};
   let s=chartSetup(cv);if(!s)return;
   let{ctx,w,h}=s;
+  let tc=themeColors();
   if(!vals||!vals.length||vals.every(v=>!v)){emptyChart(ctx,w,h,opts.emptyMsg);return}
   let left=50,right=12,top=opts.showValues?22:10,bottom=20;
   let plotW=Math.max(10,w-left-right),plotH=Math.max(10,h-top-bottom);
@@ -541,24 +592,24 @@ function detailedLine(cv,vals,labels,baseStep,unit,opts){
   ctx.lineWidth=1;
   for(let i=0;i<=count;i++){
     let v=step*i,y=top+plotH-(v/niceMax)*plotH;
-    ctx.strokeStyle='rgba(140,153,170,.12)';
+    ctx.strokeStyle=tc.gridStrong;
     ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
-    ctx.fillStyle='#8995a6';ctx.textAlign='right';
+    ctx.fillStyle=tc.muted;ctx.textAlign='right';
     ctx.fillText(Math.round(v).toLocaleString()+(unit?' '+unit:''),left-8,y+3);
   }
 
   vals.forEach((v,i)=>{
     let x=left+(plotW*i)/Math.max(1,vals.length-1);
-    ctx.strokeStyle='rgba(140,153,170,.06)';
+    ctx.strokeStyle=tc.gridSoft;
     ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,top+plotH);ctx.stroke();
-    ctx.fillStyle='#8995a6';ctx.textAlign='center';
+    ctx.fillStyle=tc.muted;ctx.textAlign='center';
     ctx.fillText(labels[i]||'',x,h-6);
   });
 
   if(opts.avgLine!=null&&niceMax>0){
     let y=top+plotH-(opts.avgLine/niceMax)*plotH;
     ctx.save();ctx.setLineDash([4,4]);
-    ctx.strokeStyle='rgba(174,188,255,.5)';ctx.lineWidth=1;
+    ctx.strokeStyle=tc.accentDim;ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
     ctx.restore();
   }
@@ -568,13 +619,13 @@ function detailedLine(cv,vals,labels,baseStep,unit,opts){
     let x=left+(plotW*i)/Math.max(1,vals.length-1),y=top+plotH-(v/niceMax)*plotH;
     i?ctx.lineTo(x,y):ctx.moveTo(x,y);
   });
-  ctx.strokeStyle='#aebcff';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+  ctx.strokeStyle=tc.accent;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
 
   vals.forEach((v,i)=>{
     let x=left+(plotW*i)/Math.max(1,vals.length-1),y=top+plotH-(v/niceMax)*plotH;
-    ctx.fillStyle='#aebcff';ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=tc.accent;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();
     if(opts.showValues){
-      ctx.fillStyle='#c7d0ff';ctx.font='10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+      ctx.fillStyle=tc.accentSoft;ctx.font='10px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
       ctx.textAlign='center';
       ctx.fillText(String(Math.round(v)),x,y-8);
     }
@@ -584,6 +635,7 @@ function detailedLine(cv,vals,labels,baseStep,unit,opts){
 function bars(cv,obj,unit){
   let s=chartSetup(cv);if(!s)return;
   let{ctx,w,h}=s;
+  let tc=themeColors();
   let entries=Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,8);
   if(!entries.length){emptyChart(ctx,w,h,'No workouts yet');return}
   let total=entries.reduce((a,x)=>a+x[1],0)||1;
@@ -593,13 +645,13 @@ function bars(cv,obj,unit){
   ctx.font='11px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
   entries.forEach(([k,v],i)=>{
     let y=6+i*rowH;
-    ctx.fillStyle='#9aa6b8';ctx.textAlign='left';
+    ctx.fillStyle=tc.muted;ctx.textAlign='left';
     ctx.fillText(k.length>13?k.slice(0,12)+'…':k,4,y+rowH*0.62);
     let barMax=Math.max(10,w-labelW-90);
     let barW=Math.max(2,(barMax*v)/max);
-    ctx.fillStyle='#aebcff';
+    ctx.fillStyle=tc.accent;
     ctx.fillRect(labelW,y+3,barW,Math.max(4,rowH-10));
-    ctx.fillStyle='#eef1ff';
+    ctx.fillStyle=tc.text;
     let pct=Math.round((v/total)*100);
     ctx.fillText(`${Math.round(v).toLocaleString()}${unit?' '+unit:''} (${pct}%)`,labelW+barW+6,y+rowH*0.62);
   });
@@ -608,6 +660,7 @@ function bars(cv,obj,unit){
 function rangeChart(cv,labels,lowVals,highVals,baseStep,unit){
   let s=chartSetup(cv);if(!s)return;
   let{ctx,w,h}=s;
+  let tc=themeColors();
   if(!labels.length||highVals.every(v=>!v)){emptyChart(ctx,w,h,'No data yet');return}
   let left=50,right=12,top=10,bottom=20;
   let plotW=Math.max(10,w-left-right),plotH=Math.max(10,h-top-bottom);
@@ -621,42 +674,55 @@ function rangeChart(cv,labels,lowVals,highVals,baseStep,unit){
   ctx.lineWidth=1;
   for(let i=0;i<=count;i++){
     let v=step*i,y=top+plotH-(v/niceMax)*plotH;
-    ctx.strokeStyle='rgba(140,153,170,.12)';
+    ctx.strokeStyle=tc.gridStrong;
     ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
-    ctx.fillStyle='#8995a6';ctx.textAlign='right';
+    ctx.fillStyle=tc.muted;ctx.textAlign='right';
     ctx.fillText(Math.round(v).toLocaleString()+(unit?' '+unit:''),left-8,y+3);
   }
   labels.forEach((lb,i)=>{
     let[x]=xy(highVals,i);
-    ctx.fillStyle='#8995a6';ctx.textAlign='center';
+    ctx.fillStyle=tc.muted;ctx.textAlign='center';
     ctx.fillText(lb||'',x,h-6);
   });
 
   ctx.beginPath();
   highVals.forEach((v,i)=>{let[x,y]=xy(highVals,i);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
   for(let i=lowVals.length-1;i>=0;i--){let[x,y]=xy(lowVals,i);ctx.lineTo(x,y)}
-  ctx.closePath();ctx.fillStyle='rgba(174,188,255,.16)';ctx.fill();
+  ctx.closePath();ctx.fillStyle=tc.fill;ctx.fill();
 
   ctx.beginPath();
   lowVals.forEach((v,i)=>{let[x,y]=xy(lowVals,i);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
-  ctx.strokeStyle='#7180bd';ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+  ctx.strokeStyle=tc.accentDim;ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
 
   ctx.beginPath();
   highVals.forEach((v,i)=>{let[x,y]=xy(highVals,i);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
-  ctx.strokeStyle='#aebcff';ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+  ctx.strokeStyle=tc.accent;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
 
-  [[lowVals,'#7180bd'],[highVals,'#aebcff']].forEach(([vals,color])=>{
+  [[lowVals,tc.accentDim],[highVals,tc.accent]].forEach(([vals,color])=>{
     vals.forEach((v,i)=>{let[x,y]=xy(vals,i);ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,2.6,0,Math.PI*2);ctx.fill()});
   });
 }
 
 /* ---------- dashboard ---------- */
+function computeStreak(){
+  let goal=Math.max(1,data.settings.goal||3);
+  let countWeek=start=>{let end=new Date(start);end.setDate(end.getDate()+7);return data.workouts.filter(w=>new Date(w.date)>=start&&new Date(w.date)<end).length};
+  let ws=new Date(),day=(ws.getDay()+6)%7;
+  ws.setHours(0,0,0,0);ws.setDate(ws.getDate()-day);
+  let cursor=new Date(ws);
+  if(countWeek(cursor)<goal)cursor.setDate(cursor.getDate()-7);
+  let streak=0;
+  while(countWeek(cursor)>=goal){streak++;cursor.setDate(cursor.getDate()-7)}
+  return streak;
+}
+
 function dashboard(){
   let t=week(),days=new Set(t.w.map(x=>dk(x.date)));
   $('weekWorkouts').textContent=`${t.w.length} workout${t.w.length===1?'':'s'}`;
   $('weekFrequency').textContent=`${days.size} training day${days.size===1?'':'s'}`;
   let weekVol=t.w.reduce((a,x)=>a+(+x.volume||0),0);
   $('volumeWeek').textContent=`${Math.round(weekVol).toLocaleString()} lb`;
+  $('streakVal').textContent=computeStreak();
 
   let ws=new Date(),day=(ws.getDay()+6)%7;
   ws.setHours(0,0,0,0);ws.setDate(ws.getDate()-day);
@@ -720,7 +786,35 @@ function updateProgress(n){
   let eightVals=keys.map(k=>trend[k]/(1+8/30));
   rangeChart($('strengthChart'),keys.map(k=>k.slice(5)),eightVals,sixVals,5,'lb');
 
-  $('progressDetails').innerHTML=`<div class="card"><b>Progression recommendation</b><p class="muted small">${esc(suggest(n))}. Shaded band shows your estimated 6–8 rep working range — widen/rise it by adding load once you can hit 8 reps.</p></div>`;
+  let extra='';
+  let sessions={};
+  a.forEach(s=>{let k=dk(s.date);(sessions[k]=sessions[k]||[]).push(s)});
+  let sessionDates=Object.keys(sessions).sort();
+  let sessionTrend=sessionDates.map(d=>Math.max(...sessions[d].map(s=>s.weight*(1+s.reps/30))));
+  if(sessionDates.length>=2){
+    let lastTwo=sessionDates.slice(-2);
+    let readyToProgress=lastTwo.every(d=>sessions[d].every(s=>s.reps>=8));
+    if(readyToProgress){
+      let topWeight=Math.max(...sessions[lastTwo[1]].map(s=>s.weight));
+      let nextWeight=Math.round((topWeight*1.05)/5)*5;
+      let applied=data.overrides&&data.overrides[n]&&data.overrides[n].weight===nextWeight;
+      extra+=`<div class="card"><b>🔼 Ready to progress</b><p class="muted small">You hit 8 reps on every set the last 2 sessions.</p>${applied?`<p class="muted small">Next session will start at ${nextWeight} lb.</p>`:`<button data-applyprogress="${nextWeight}" class="ghost full">Start next session at ${nextWeight} lb</button>`}</div>`;
+    }
+  }
+  if(sessionTrend.length>=3){
+    let last3=sessionTrend.slice(-3);
+    let plateaued=last3[1]<=last3[0]*1.02&&last3[2]<=last3[1]*1.02;
+    if(plateaued)extra+=`<div class="card"><b>⏸ Plateau detected</b><p class="muted small">Estimated 1RM has been flat or dropping for 3+ sessions. Consider a deload week — same exercises at ~60% intensity, fewer sets.</p></div>`;
+  }
+
+  $('progressDetails').innerHTML=`<div class="card"><b>Progression recommendation</b><p class="muted small">${esc(suggest(n))}. Shaded band shows your estimated 6–8 rep working range — widen/rise it by adding load once you can hit 8 reps.</p></div>${extra}`;
+  let applyBtn=$('progressDetails').querySelector('[data-applyprogress]');
+  if(applyBtn)applyBtn.onclick=()=>{
+    data.overrides=data.overrides||{};
+    data.overrides[n]={weight:+applyBtn.dataset.applyprogress,reps:6};
+    save();
+    updateProgress(n);
+  };
 }
 
 function renderMuscleChart(){
@@ -779,11 +873,21 @@ function history(){
   });
 }
 
-$('clearHistory').onclick=()=>{if(confirm('Clear workout history?')){data.workouts=[];save();history();dashboard();performance()}};
+$('clearHistory').onclick=()=>{
+  if(!data.workouts.length)return;
+  let snapshot=data.workouts;
+  data.workouts=[];
+  save();history();dashboard();performance();
+  showToast('History cleared.',()=>{
+    data.workouts=snapshot;
+    save();history();dashboard();performance();
+  });
+};
 
 /* ---------- settings ---------- */
 function settings(){
   $('defaultRest').value=data.settings.rest;
+  $('weeklyGoal').value=data.settings.goal||3;
   $('routineSettings').innerHTML=Object.entries(data.routines).map(([r,e])=>{
     let builtIn=Object.prototype.hasOwnProperty.call(ROUTINES,r);
     return `<div class="routineRow" style="padding:12px 0;border-bottom:1px solid #252e3b"><span><b>${esc(r)}</b><br><span class="muted small">${e.length} exercises${builtIn?' • Built in':''}</span></span><button data-delroutine="${esc(r)}" class="textBtn danger" style="color:var(--danger-text)">Delete</button></div>`;
@@ -798,6 +902,21 @@ function settings(){
   });
 }
 $('saveRest').onclick=()=>{data.settings.rest=Math.max(5,+$('defaultRest').value||90);save();alert('Default rest timer saved.')};
+$('saveGoal').onclick=()=>{data.settings.goal=Math.max(1,+$('weeklyGoal').value||3);save();dashboard();alert('Weekly goal saved.')};
+
+function applyTheme(light){
+  document.body.classList.toggle('light',light);
+  $('themeToggle').textContent=light?'Switch to dark mode':'Switch to light mode';
+  let meta=document.querySelector('meta[name="theme-color"]');
+  if(meta)meta.setAttribute('content',light?'#f5f6fa':'#0b0f17');
+}
+$('themeToggle').onclick=()=>{
+  let light=!document.body.classList.contains('light');
+  data.settings.theme=light?'light':'dark';
+  save();
+  applyTheme(light);
+};
+applyTheme(data.settings.theme==='light');
 
 $('exportData').onclick=()=>{
   let a=document.createElement('a');
