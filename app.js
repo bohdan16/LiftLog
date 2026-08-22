@@ -10,12 +10,12 @@ const ROUTINES={'Push A':['Incline Dumbbell Press','Overhead Press','Cable Later
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||{workouts:[],routines:{...ROUTINES},settings:{rest:90}};
 delete data.routines['Legs A'];delete data.routines['Legs B'];delete data.routines['Legs C'];delete data.routines['Legs'];
 localStorage.setItem(KEY,JSON.stringify(data));
-let cur={routine:Object.keys(data.routines)[0]||'Push A',started:null,exercises:[],active:false},activeTimers={},installEvt=null;
+let cur={routine:Object.keys(data.routines)[0]||'Push A',started:null,exercises:[],active:false},activeTimers={},currentTimerKey=null,installEvt=null;
 let editingRoutineKey=null;
 const $=id=>document.getElementById(id); const esc=s=>String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const save=()=>localStorage.setItem(KEY,JSON.stringify(data)); const dk=d=>new Date(d).toISOString().slice(0,10); const fd=d=>new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
 
-function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.nav===id));if(id==='dashboard')dashboard();if(id==='performance')performance();if(id==='workout')workout()}
+function nav(id){document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id===id));document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.nav===id));if(id==='dashboard')dashboard();if(id==='performance')performance();if(id==='workout')workout();if(id==='settings')settings()}
 document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>nav(b.dataset.nav));
 function info(n){return EX[n]||['Other',[]]};
 function setsFor(n){let a=[];data.workouts.forEach(w=>(w.exercises||[]).filter(e=>e.name===n).forEach(e=>(e.sets||[]).forEach(s=>{let wt=+s.weight||0,r=+s.reps||0;if(wt&&r)a.push({weight:wt,reps:r,date:w.date})})));return a}
@@ -43,6 +43,14 @@ function make(n,entry){
 function startSetTimer(eIdx, sIdx){
   let set = cur.exercises[eIdx].sets[sIdx];
   let timerKey = `${eIdx}-${sIdx}`;
+
+  // Only one rest timer runs at a time — starting a new one auto-completes the previous.
+  if(currentTimerKey && currentTimerKey!==timerKey){
+    let [pe,ps]=currentTimerKey.split('-').map(Number);
+    stopSetTimer(pe,ps);
+  }
+  currentTimerKey=timerKey;
+
   if(activeTimers[timerKey]) clearInterval(activeTimers[timerKey]);
 
   let duration = Math.max(5, +set.restSec || 90);
@@ -68,6 +76,7 @@ function startSetTimer(eIdx, sIdx){
       delete activeTimers[timerKey];
       set.timerEnd = null;
       set.timerDuration = null;
+      if(currentTimerKey===timerKey)currentTimerKey=null;
       if(el){
         el.textContent = 'GO!';
         el.classList.remove('running');
@@ -91,6 +100,7 @@ function stopSetTimer(eIdx, sIdx){
   set.timerDuration = null;
   let barEl = $(`timerBar-${eIdx}-${sIdx}`);
   if(barEl) barEl.style.width = '0%';
+  if(currentTimerKey===timerKey)currentTimerKey=null;
 }
 
 function currentExerciseName(){
@@ -132,8 +142,10 @@ function workout(){
 
   $('exerciseList').innerHTML=cur.exercises.map((e,i)=>{
     let b=best(e.name),inf=info(e.name);
-    let partnerIdx=supersetPartner(i);
-    let pairNote=partnerIdx!=null?`<span class="muted small pairNote">⇄ Paired with ${esc(cur.exercises[partnerIdx].name)} — rest starts once both sides are done</span>`:'';
+    let role=supersetRole(i);
+    let pairNote='';
+    if(role&&role.role==='first')pairNote=`<span class="muted small pairNote">⇄ Superset lead — no rest here, rest happens after ${esc(cur.exercises[role.partner].name)}'s set</span>`;
+    else if(role&&role.role==='second')pairNote=`<span class="muted small pairNote">⇄ Follows ${esc(cur.exercises[role.partner].name)} in the superset</span>`;
     return `<div class="card exercise" data-idx="${i}">
       <div class="exerciseDragBar" data-drag>${esc(e.name)}${e.superset?' • SUPERSET':''}</div>
       <div class="exerciseSub"><span class="pill">${esc(inf[0])}</span></div>
@@ -142,14 +154,16 @@ function workout(){
       <div class="sets">${e.sets.map((x,j)=>{
         let timeStr = x.timerEnd ? new Date(Math.max(0, x.timerEnd - Date.now())).toISOString().slice(14,19) : new Date((+x.restSec||90)*1000).toISOString().slice(14,19);
         let barPct = (x.timerEnd && x.timerDuration) ? Math.max(0, ((x.timerEnd - Date.now()) / (x.timerDuration * 1000)) * 100) : 0;
+        let restDisabled = role&&role.role==='first';
 
         return `<div class="setBlock ${x.done?'done':''}">
           <div class="setRow">
             <span class="setNum">${j+1}</span>
-            <input data-e="${i}" data-s="${j}" data-f="weight" type="number" value="${x.weight}" placeholder="lb">
-            <input data-e="${i}" data-s="${j}" data-f="reps" type="number" value="${x.reps}" placeholder="reps">
+            <input class="workInput" data-e="${i}" data-s="${j}" data-f="weight" type="number" value="${x.weight}" placeholder="lb">
+            <input class="workInput" data-e="${i}" data-s="${j}" data-f="reps" type="number" value="${x.reps}" placeholder="reps">
             <button class="complete ${x.done?'done':''}" data-c="${i}" data-s="${j}">✓</button>
           </div>
+          ${restDisabled?`<div class="setTimerRow restDisabled"><span class="muted small">No rest — superset lead</span></div>`:`
           <div class="progressTrack"><div id="timerBar-${i}-${j}" class="progressBar" style="width:${barPct}%"></div></div>
           <div class="setTimerRow">
             <span class="muted small">Rest</span>
@@ -157,7 +171,7 @@ function workout(){
             <span class="muted small">s</span>
             <span id="timer-${i}-${j}" class="setTimerDisplay ${x.timerEnd?'running':''}">${timeStr}</span>
             <button class="timerBtn ghost" data-tstart="${i}" data-ts="${j}">${x.timerEnd?'Skip':'Start'}</button>
-          </div>
+          </div>`}
         </div>`
       }).join('')}</div>
       <div class="exerciseTools"><button data-sub="${i}">Substitute</button><button data-sup="${i}">Superset</button><button data-rem="${i}">Remove</button></div>
@@ -177,14 +191,10 @@ function workout(){
     let x = cur.exercises[eIdx].sets[sIdx];
     if(!(+x.weight&&+x.reps))return alert('Enter weight and reps first.');
     x.done = !x.done;
+    let role=supersetRole(eIdx);
     if(x.done){
-      let partnerIdx=supersetPartner(eIdx);
-      if(partnerIdx!=null){
-        let partnerSet=cur.exercises[partnerIdx]&&cur.exercises[partnerIdx].sets[sIdx];
-        if(partnerSet&&partnerSet.done){
-          startSetTimer(eIdx,sIdx); // both halves of the superset done — rest starts now
-        }
-        // else: waiting on the paired exercise's matching set, no timer yet
+      if(role&&role.role==='first'){
+        // superset lead exercise never gets a rest timer
       }else{
         startSetTimer(eIdx, sIdx);
       }
@@ -196,6 +206,8 @@ function workout(){
 
   $('exerciseList').querySelectorAll('[data-tstart]').forEach(b=>b.onclick=()=>{
     let eIdx = +b.dataset.tstart, sIdx = +b.dataset.ts;
+    let role=supersetRole(eIdx);
+    if(role&&role.role==='first')return;
     let x = cur.exercises[eIdx].sets[sIdx];
     if(x.timerEnd){
       stopSetTimer(eIdx, sIdx);
@@ -219,9 +231,11 @@ function workout(){
   initExerciseDrag();
 }
 
-function supersetPartner(i){
-  if(cur.exercises[i]&&cur.exercises[i].superset&&cur.exercises[i+1])return i+1;
-  if(cur.exercises[i-1]&&cur.exercises[i-1].superset)return i-1;
+function supersetRole(i){
+  let ex=cur.exercises[i];
+  if(ex&&ex.superset&&cur.exercises[i+1])return {partner:i+1,role:'first'};
+  let prev=cur.exercises[i-1];
+  if(prev&&prev.superset)return {partner:i-1,role:'second'};
   return null;
 }
 

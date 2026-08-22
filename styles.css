@@ -17,6 +17,9 @@
   --radius-md:13px;
   --radius-sm:10px;
   --ease:cubic-bezier(.2,.7,.3,1);
+  --rest:#ffb86b;
+  --rest-dim:#c98a4a;
+  --rest-wash:rgba(255,184,107,.10);
 }
 body.light{
   --bg:#f4f5f9;
@@ -33,6 +36,9 @@ body.light{
   --danger-bg:#fdecee;
   --danger-text:#c23048;
   --danger-border:#f3c4cc;
+  --rest:#c2761a;
+  --rest-dim:#9c5f16;
+  --rest-wash:rgba(194,118,26,.10);
 }
 .streakBadge{
   text-align:right;
@@ -479,7 +485,7 @@ h3{margin:0}
 .progressBar{
   height:100%;
   width:0%;
-  background:linear-gradient(90deg,var(--accent-dim),var(--accent));
+  background:linear-gradient(90deg,var(--rest-dim),var(--rest));
   transition:width .1s linear;
 }
 
@@ -487,8 +493,11 @@ h3{margin:0}
   display:flex;
   align-items:center;
   gap:6px;
-  margin-top:6px;
-  padding-top:4px;
+  margin-top:8px;
+  padding:6px 8px;
+  border-radius:8px;
+  background:var(--rest-wash);
+  border:1px solid rgba(255,184,107,.18);
 }
 .restInput{
   width:48px;
@@ -500,7 +509,7 @@ h3{margin:0}
   text-align:center;
   font-size:12px;
 }
-.restInput:focus{border-color:var(--accent)}
+.restInput:focus{border-color:var(--rest)}
 .setTimerDisplay{
   font-size:13px;
   font-weight:bold;
@@ -510,12 +519,20 @@ h3{margin:0}
   font-variant-numeric:tabular-nums;
   transition:color .2s var(--ease)}
 .setTimerDisplay.running{
-  color:var(--accent);
+  color:var(--rest);
 }
 .timerBtn{
   padding:2px 8px;
   font-size:12px;
   border-radius:6px;
+  border-color:var(--rest-dim);
+  color:var(--rest);
+}
+.setTimerRow.restDisabled{
+  background:rgba(140,153,170,.06);
+  border:1px dashed var(--input-border);
+  opacity:.6;
+  justify-content:center;
 }
 
 .addSet{
@@ -745,7 +762,7 @@ h3{margin:0}
   background:rgba(13,18,27,.96);
   border-top:1px solid #222b39;
   display:grid;
-  grid-template-columns:repeat(3,1fr);
+  grid-template-columns:repeat(4,1fr);
   z-index:10;
   backdrop-filter:blur(18px);
   -webkit-backdrop-filter:blur(18px);
@@ -763,8 +780,7 @@ h3{margin:0}
   position:relative;
 }
 .tab[data-nav="workout"]{font-size:21px}
-.tab[data-nav="cardio"]{font-size:18px}
-.tab[data-nav="history"]{font-size:18px}
+.tab[data-nav="settings"]{font-size:18px}
 .tab span{
   display:block;
   font-size:10px;
