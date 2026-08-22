@@ -29,7 +29,7 @@ function routineEntries(list){
 function routineNames(list){return routineEntries(list).map(e=>e.name)}
 
 function makeSet(b){
-  return {weight:b.weight||'',reps:b.reps||'',done:false,restSec:data.settings.rest||90,timerEnd:null,timerDuration:null};
+  return {weight:b.weight||'',reps:b.reps||'',done:false,restSec:b.restSec||data.settings.rest||90,timerEnd:null,timerDuration:null};
 }
 function make(n,entry){
   let b=best(n);
@@ -144,8 +144,8 @@ function workout(){
     let b=best(e.name),inf=info(e.name);
     let role=supersetRole(i);
     let pairNote='';
-    if(role&&role.role==='first')pairNote=`<span class="muted small pairNote">⇄ Superset lead — no rest here, rest happens after ${esc(cur.exercises[role.partner].name)}'s set</span>`;
-    else if(role&&role.role==='second')pairNote=`<span class="muted small pairNote">⇄ Follows ${esc(cur.exercises[role.partner].name)} in the superset</span>`;
+    if(role&&role.role==='first')pairNote=`<span class="muted small pairNote">Superset with '${esc(cur.exercises[role.partner].name)}'</span>`;
+    else if(role&&role.role==='second')pairNote=`<span class="muted small pairNote">Superset with '${esc(cur.exercises[role.partner].name)}' — rest covers both</span>`;
     return `<div class="card exercise" data-idx="${i}">
       <div class="exerciseDragBar" data-drag>${esc(e.name)}${e.superset?' • SUPERSET':''}</div>
       <div class="exerciseSub"><span class="pill">${esc(inf[0])}</span></div>
@@ -220,7 +220,7 @@ function workout(){
   $('exerciseList').querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{
     let ex=cur.exercises[+b.dataset.add];
     let last=ex.sets[ex.sets.length-1];
-    let src=(last&&(+last.weight||+last.reps))?{weight:last.weight,reps:last.reps}:best(ex.name);
+    let src=(last&&(+last.weight||+last.reps))?{weight:last.weight,reps:last.reps,restSec:last.restSec}:best(ex.name);
     ex.sets.push(makeSet(src));
     workout();
   });
@@ -233,7 +233,9 @@ function workout(){
 
 function supersetRole(i){
   let ex=cur.exercises[i];
-  if(ex&&ex.superset&&cur.exercises[i+1])return {partner:i+1,role:'first'};
+  if(!ex||!ex.superset)return null;
+  let next=cur.exercises[i+1];
+  if(next&&next.superset)return {partner:i+1,role:'first'};
   let prev=cur.exercises[i-1];
   if(prev&&prev.superset)return {partner:i-1,role:'second'};
   return null;
